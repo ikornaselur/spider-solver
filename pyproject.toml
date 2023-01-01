@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "spider-solver"
+version = "0.1.0"
+description = ""
+authors = ["Axel <spider@absalon.dev>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+[tool.poetry.group.lint.dependencies]
+pyright = "^1.1.286"
+isort = "^5.11.4"
+black = "^22.12.0"
+flake8 = "^6.0.0"
+
+[tool.poetry.group.dev.dependencies]
+ipython = "^8.7.0"
+ipdb = "^0.13.11"
+pdbpp = "^0.10.3"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.2.0"
+pytest-clarity = "^1.0.1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
