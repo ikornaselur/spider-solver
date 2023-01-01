@@ -4,23 +4,23 @@ A game board is a Spider Solitare board that has 7 rows, with the top row
 having one card and bottom row having 7 cards.
 
 A card is going to be blocked by the two cards below it, in a pyramid fashion,
-creating sort of a binary tree where only the leaves can be removed.
+creating sort of a one directional graph where only the leaves (that don't
+point to any other cards) can be removed.
+
+While this is techincally a graph, each node will only have 0, 1 or 2 one way
+edges to other nodes. A node may have 0, 1 or 2 one direction edges from other
+nodes pointing at it.
 """
 from __future__ import annotations
 
-from typing import Optional, Self
+from typing import Self
 
 
 class Board:
-    card_root: Optional[Card]
     stack: Stack
+    cards: dict[Card, set[Card]]
 
-    def __init__(self, card_root: Card, stack: Stack) -> None:
-        self.card_root = card_root
-        self.stack = stack
-
-    @classmethod
-    def from_ints(cls, rows: list[list[int]], stack: list[int]) -> Self:
+    def __init__(self, rows: list[list[int]], stack: list[int]) -> None:
         if len(rows) != 7:
             raise ValueError("Exactly 7 rows of cards are required")
         if any(len(row) != idx + 1 for idx, row in enumerate(rows)):
@@ -28,16 +28,34 @@ class Board:
                 "Number of cards per row needs to match the 1-indexed row number"
             )
 
-        carded_rows = []
-        for row_num in range(len(rows)):
-            carded_rows.append([Card(num) for num in rows[row_num]])
-            if row_num == 0:
-                continue
+        self.cards = {}
 
-            for idx in range(len(carded_rows[row_num-1])):
-                carded_rows[row_num-1][idx].set_lr(carded_rows[row_num][idx], carded_rows[row_num][idx+1])
+        # Keep track of references to the cards from the row/column tuple to create the edges
+        row_to_card_map: dict[tuple[int, int], Card] = {}
 
-        return cls(card_root=carded_rows[0][0], stack=Stack.from_ints(stack))
+        for row_idx, row in enumerate(rows):
+            for num_idx, num in enumerate(row):
+                card = Card(num)
+                self.cards[card] = set()
+                row_to_card_map[(row_idx, num_idx)] = card
+
+                if row_idx == 0:
+                    # No cards above the first row
+                    continue
+                if num_idx != 0:
+                    # All numbers, except the first, will have a parent on the left
+                    left_parent = row_to_card_map[(row_idx - 1, num_idx - 1)]
+                    self.cards[left_parent].add(card)
+                if num_idx != len(row) - 1:
+                    # All numbers, except last, will have a parent on the right
+                    right_parent = row_to_card_map[(row_idx - 1, num_idx)]
+                    self.cards[right_parent].add(card)
+
+        self.stack = Stack.from_ints(stack)
+
+    @property
+    def leafs(self) -> set[Card]:
+        return set(card for card, edges in self.cards.items() if len(edges) == 0)
 
 
 class Stack:
@@ -76,42 +94,16 @@ class Stack:
 
 
 class Card:
-    """A game card, which can have up to two cards blocking it"""
-
     num: int  # The value of the card from 1 to 13
-    parent: Optional[Card]
-    left: Optional[Card]
-    right: Optional[Card]
 
-    def __init__(
-        self,
-        num: int,
-        parent: Optional[Card] = None,
-        left: Optional[Card] = None,
-        right: Optional[Card] = None,
-    ) -> None:
+    def __init__(self, num: int) -> None:
         self.num = num
-        self.parent = parent
-        self.set_left(left)
-        self.set_right(right)
-
-    def set_left(self, card: Optional[Card]) -> None:
-        self.left = card
-        if self.left:
-            self.left.parent = self
-
-    def set_right(self, card: Optional[Card]) -> None:
-        self.right = card
-        if self.right:
-            self.right.parent = self
-
-    def set_lr(self, left: Card, right: Card) -> None:
-        self.set_left(left)
-        self.set_right(right)
 
     @property
     def value(self) -> str:
         match self.num:
+            case 1:
+                return "A"
             case 11:
                 return "J"
             case 12:
@@ -122,6 +114,4 @@ class Card:
                 return str(self.num)
 
     def __repr__(self) -> str:
-        left_val = self.left.value if self.left else "_"
-        right_val = self.right.value if self.right else "_"
-        return f"<Card {left_val}<-{self.value}->{right_val}>"
+        return f"<Card {self.value}>"
