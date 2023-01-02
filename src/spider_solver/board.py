@@ -13,6 +13,7 @@ nodes pointing at it.
 """
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Sequence
 from enum import Enum
 from typing import NamedTuple, Optional, Self, TypeAlias, Union
@@ -215,7 +216,9 @@ class Stack:
 
         for card in cards:
             if self.prev is not card and self.peek is not card:
-                raise IllegalMove("Unable to remove card, it's not visible from the stack")
+                raise IllegalMove(
+                    "Unable to remove card, it's not visible from the stack"
+                )
 
         for card in cards:
             if self.prev is card:
@@ -245,13 +248,17 @@ class Board:
     root_card: Card
     moves: int
 
-    def __init__(self, rows: list[list[int]], stack: list[int]) -> None:
-        if len(rows) != 7:
-            raise ValueError("Exactly 7 rows of cards are required")
-        if any(len(row) != idx + 1 for idx, row in enumerate(rows)):
-            raise ValueError(
-                "Number of cards per row needs to match the 1-indexed row number"
-            )
+    def __init__(
+        self, rows: list[list[int]], stack: list[int], _validate: bool = True
+    ) -> None:
+        if _validate:
+            # For testing..
+            if len(rows) != 7:
+                raise ValueError("Exactly 7 rows of cards are required")
+            if any(len(row) != idx + 1 for idx, row in enumerate(rows)):
+                raise ValueError(
+                    "Number of cards per row needs to match the 1-indexed row number"
+                )
 
         self.moves = 0
         self.cards = {}
@@ -301,10 +308,30 @@ class Board:
         A move is a 3-tuple of (Move type, number of draws required from the
         stack, tuple of the cards to match)
         The tuple of cards can be a one tuple, only if it's a king.
+
+        Some feeble optimisations:
+            * If there is a removable king without drawing, it's the only move
+            * If we have to draw to continue and there is a king on top of the
+              stack, removing it is the only move
+            * If any match can be done where it's the last two cards of their
+              sort, then that's the only move
+                - If they're on the table, just get it out of the way
+                - If they're in the stack, only give them as the only option if
+                  the only alternatives are to draw anyway
+                - If removing cards locks other cards in the graph, it's not a
+                  valid move! # TODO This
         """
         moves = set()
 
+        # Get cards that only have 1 count left
+        card_counts = Counter(
+            [card.num for card in self.cards.keys()]
+            + [card.num for card in self.stack.cards]
+        )
+        solo_cards = {key for key, val in card_counts.items() if val == 1}
+
         # Check for any matches on the table itself
+        moves_on_table = False
         leaves = self.leaves
         for leaf in leaves:
             for match in (
@@ -313,16 +340,29 @@ class Board:
                 if leaf.num > match.num:
                     leaf, match = match, leaf
                 if leaf is match:
-                    # It's a king
-                    moves.add((MoveType.BoardMatch, 0, (leaf,)))
+                    # It's a king, we just return that as the only move!
+                    return {(MoveType.BoardMatch, 0, (leaf,))}
+                elif leaf.num in solo_cards:
+                    # This is a part of a last pair, it's the only logical move
+                    return {(MoveType.BoardMatch, 0, (leaf, match))}
                 else:
                     moves.add((MoveType.BoardMatch, 0, (leaf, match)))
+                    moves_on_table = True
 
         # Check for any moves that require the stack
         for leaf in leaves:
             if not (idxs := self.stack.num_in_stack(leaf.match)):
                 continue
             for idx in idxs:
+                if leaf.num in solo_cards and idx <= 0:
+                    # We should get rid of it ASAP
+                    return {
+                        (
+                            MoveType.BoardStackMatch,
+                            max(idx, 0),
+                            (leaf, self.stack.get_card_at_draws(idx)),
+                        )
+                    }
                 moves.add(
                     (
                         MoveType.BoardStackMatch,
@@ -334,7 +374,17 @@ class Board:
                 )
 
         # Check for any moves that match in the stack
-        moves.update(self.stack.get_stack_moves())
+        stack_moves = self.stack.get_stack_moves()
+        for move_type, draws, cards in stack_moves:
+            if (
+                draws == 0
+                and (cards[0].num in solo_cards or cards[0].num == 13)
+                and not moves_on_table
+            ):
+                # This stack move is a solo move, but we should only return it
+                # IF there are no 0 draw moves already available
+                return {(move_type, draws, cards)}
+        moves.update(stack_moves)
 
         return moves
 
@@ -352,13 +402,18 @@ class Board:
                 self._remove_cards(cards)
             case (MoveType.BoardStackMatch, (board_card, stack_card)):
                 if not board_card.on_board ^ stack_card.on_board:
-                    raise SpiderException("Expected one card to be on board and other on stack")
+                    raise SpiderException(
+                        "Expected one card to be on board and other on stack"
+                    )
 
                 if not board_card.on_board:
                     # Flip them around to be correct
                     board_card, stack_card = stack_card, board_card
 
-                if stack_card is not self.stack.peek and stack_card is not self.stack.prev:
+                if (
+                    stack_card is not self.stack.peek
+                    and stack_card is not self.stack.prev
+                ):
                     raise IllegalMove("Unable to match a stack card that isn't visible")
 
                 # Remove the stack card from the stack

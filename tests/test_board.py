@@ -36,6 +36,78 @@ def test_board_get_moves(board: Board):
     assert len(moves) == 23
 
 
+def test_board_get_moves_with_king():
+    # fmt: off
+    board = Board(
+        rows=[
+                      [8],
+                     [7, 5],  # noqa     It's just easier to visualise
+                   [12, 1, 4],  # noqa   like this!
+                  [11, 7, 1, 6],  # noqa 
+                [12, 3, 1, 12, 7],  # noqa
+              [6, 2, 10, 5, 5, 9],  # noqa
+            [13, 2, 10, 4, 2, 11, 3],  # noqa
+        ],
+        stack=[6, 8, 11, 6, 8, 13, 13, 8, 10, 12, 3, 4,
+               2, 11, 1, 7, 10, 9, 9, 4, 3, 13, 9, 5],
+    )
+    # fmt: on
+    moves = list(board.get_moves())
+
+    assert len(moves) == 1
+    move_type, draws, cards = moves.pop()
+    assert move_type == MoveType.BoardMatch
+    assert draws == 0
+    assert len(cards) == 1
+    assert cards[0].num == 13
+
+
+def test_board_get_moves_with_solo_cards_on_table():
+    # fmt: off
+    board = Board(
+        rows=[
+                      [8],
+                     [8, 5],  # noqa     It's just easier to visualise
+                   [12, 1, 5],  # noqa   like this!
+        ],
+        stack=[8, 5],
+        _validate=False,
+    )
+    # fmt: on
+    moves = list(board.get_moves())
+
+    assert len(moves) == 1
+    move_type, draws, cards = moves.pop()
+    assert move_type == MoveType.BoardMatch
+    assert draws == 0
+    assert len(cards) == 2
+    assert cards[0].num == 1
+    assert cards[1].num == 12
+
+
+def test_board_get_moves_with_solo_card_on_table_and_stack():
+    # fmt: off
+    board = Board(
+        rows=[
+                      [8],
+                     [8, 5],  # noqa     It's just easier to visualise
+                   [5, 1, 5],  # noqa   like this!
+        ],
+        stack=[12, 8],
+        _validate=False,
+    )
+    # fmt: on
+    moves = list(board.get_moves())
+
+    assert len(moves) == 1
+    move_type, draws, cards = moves.pop()
+    assert move_type == MoveType.BoardStackMatch
+    assert draws == 0
+    assert len(cards) == 2
+    assert cards[0].num == 1
+    assert cards[1].num == 12
+
+
 def test_board_play_move(board: Board):
     assert repr(board) == "\n".join(
         [
@@ -69,7 +141,7 @@ def test_board_play_move(board: Board):
 
     # Find the king and remove it
     king = next(card for card in board.cards if card.row == 5 and card.col == 4)
-    board.play_move((MoveType.BoardMatch, 0, (king, )))
+    board.play_move((MoveType.BoardMatch, 0, (king,)))
 
     assert repr(board) == "\n".join(
         [

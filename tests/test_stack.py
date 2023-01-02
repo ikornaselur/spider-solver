@@ -81,6 +81,7 @@ def test_stack_get_stack_moves_with_a_king():
     assert (MoveType.StackMatch, 5, (cards[5],)) in moves
     assert (MoveType.StackMatch, 6, (cards[6],)) in moves
 
+
 def test_stack_remove_card():
     cards = [Card(i) for i in [1, 2, 3, 4, 5, 6]]
     stack = Stack(cards)
