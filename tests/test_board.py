@@ -1,4 +1,4 @@
-from spider_solver.board import Board
+from spider_solver.board import Board, MoveType
 
 
 def test_board_init(unique_board: Board):
@@ -9,7 +9,7 @@ def test_board_init(unique_board: Board):
 
     # There should be no cards pointing at the top card
     for edges in board.cards.values():
-        assert not any(edge.num == 1 for edge in edges)
+        assert edges.left != 1 and edges.right != 1
 
     # Bottom level cards shouldn't point at any cards
     for num in [22, 23, 24, 25, 26, 27, 28]:
@@ -33,4 +33,52 @@ def test_board_leaves(unique_board: Board):
 def test_board_get_moves(board: Board):
     moves = list(board.get_moves())
 
-    assert len(moves) == 3
+    assert len(moves) == 23
+
+
+def test_board_play_move(board: Board):
+    assert repr(board) == "\n".join(
+        [
+            "       8   6",
+            "      7 5",
+            "     D A 4",
+            "    J 7 A 6",
+            "   D 3 A D 7",
+            "  6 2 0 5 K 9",
+            " 5 2 0 4 2 J 3",
+        ]
+    )
+
+    # Find the move to match the right 2 + J
+    right_two = next(card for card in board.cards if card.row == 6 and card.col == 4)
+    jack = next(card for card in board.cards if card.row == 6 and card.col == 5)
+
+    board.play_move((MoveType.BoardMatch, 0, (right_two, jack)))
+
+    assert repr(board) == "\n".join(
+        [
+            "       8   6",
+            "      7 5",
+            "     D A 4",
+            "    J 7 A 6",
+            "   D 3 A D 7",
+            "  6 2 0 5 K 9",
+            " 5 2 0 4     3",
+        ]
+    )
+
+    # Find the king and remove it
+    king = next(card for card in board.cards if card.row == 5 and card.col == 4)
+    board.play_move((MoveType.BoardMatch, 0, (king, )))
+
+    assert repr(board) == "\n".join(
+        [
+            "       8   6",
+            "      7 5",
+            "     D A 4",
+            "    J 7 A 6",
+            "   D 3 A D 7",
+            "  6 2 0 5   9",
+            " 5 2 0 4     3",
+        ]
+    )

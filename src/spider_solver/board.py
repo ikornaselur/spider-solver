@@ -14,7 +14,19 @@ nodes pointing at it.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional, Self, TypeAlias
+from typing import NamedTuple, Optional, Self, TypeAlias
+
+
+class SpiderException(Exception):
+    pass
+
+
+class IllegalMove(SpiderException):
+    pass
+
+
+class CardNotFound(SpiderException):
+    pass
 
 
 class Card:
@@ -37,6 +49,8 @@ class Card:
         match self.num:
             case 1:
                 return "A"
+            case 10:
+                return "0"  # Single width values for all cards
             case 11:
                 return "J"
             case 12:
@@ -113,9 +127,9 @@ class Stack:
     def from_ints(cls, cards: list[int]) -> Self:
         return cls([Card(num) for num in cards])
 
-    def draw(self) -> Card:
+    def draw(self, count: int = 1) -> Card:
         """Draw the next card and return what card is now at the top"""
-        self.idx = (self.idx + 1) % len(self.cards)
+        self.idx = (self.idx + count) % len(self.cards)
 
         return self.peek
 
@@ -192,9 +206,18 @@ class Stack:
         return f"<Stack {' '.join(cards)}>"
 
 
+class Edges(NamedTuple):
+    left: Optional[Card]
+    right: Optional[Card]
+
+    def __len__(self) -> int:
+        return 1 if self.left else 0 + 1 if self.right else 0
+
+
 class Board:
     stack: Stack
-    cards: dict[Card, set[Card]]
+    cards: dict[Card, Edges]
+    root_card: Card
     moves: int
 
     def __init__(self, rows: list[list[int]], stack: list[int]) -> None:
@@ -214,20 +237,22 @@ class Board:
         for row_idx, row in enumerate(rows):
             for num_idx, num in enumerate(row):
                 card = Card(num, row=row_idx, col=num_idx)
-                self.cards[card] = set()
+                self.cards[card] = Edges(None, None)
                 row_to_card_map[(row_idx, num_idx)] = card
 
                 if row_idx == 0:
                     # No cards above the first row
-                    continue
+                    self.root_card = card
                 if num_idx != 0:
                     # All numbers, except the first, will have a parent on the left
                     left_parent = row_to_card_map[(row_idx - 1, num_idx - 1)]
-                    self.cards[left_parent].add(card)
+                    self.cards[left_parent] = Edges(self.cards[left_parent].left, card)
                 if num_idx != len(row) - 1:
                     # All numbers, except last, will have a parent on the right
                     right_parent = row_to_card_map[(row_idx - 1, num_idx)]
-                    self.cards[right_parent].add(card)
+                    self.cards[right_parent] = Edges(
+                        card, self.cards[right_parent].right
+                    )
 
         self.stack = Stack.from_ints(stack)
 
@@ -262,7 +287,11 @@ class Board:
             ):
                 if leaf.num > match.num:
                     leaf, match = match, leaf
-                moves.add((MoveType.BoardMatch, 0, (leaf, match)))
+                if leaf == match:
+                    # It's a king
+                    moves.add((MoveType.BoardMatch, 0, (leaf,)))
+                else:
+                    moves.add((MoveType.BoardMatch, 0, (leaf, match)))
 
         # Check for any moves that require the stack
         for leaf in leaves:
@@ -272,7 +301,9 @@ class Board:
                 moves.add(
                     (
                         MoveType.BoardStackMatch,
-                        max(idx, 0),  # Left side of visible stack card is -1, no need to draw
+                        max(
+                            idx, 0
+                        ),  # Left side of visible stack card is -1, no need to draw
                         (leaf, self.stack.get_card_at_draws(idx)),
                     )
                 )
@@ -281,3 +312,96 @@ class Board:
         moves.update(self.stack.get_stack_moves())
 
         return moves
+
+    def play_move(self, move: Move) -> int:
+        """Play a move and return the current number of moves the board is at"""
+        move_type, draws, cards = move
+
+        if draws:
+            self.stack.draw(draws)
+            self.moves += draws
+
+        match (move_type, cards):
+            case (MoveType.BoardMatch, (left, right)):
+                # Find the cards and ensure they can be moved
+                if left not in self.cards or right not in cards:
+                    raise CardNotFound()
+                if self.cards[left] or self.cards[right]:
+                    raise IllegalMove("Cards are blocked by other cards")
+
+                # Remove blocks from cards above
+                for card in self.cards:
+                    if left in (parent := self.cards[card]):
+                        if parent.left == left:
+                            self.cards[card] = Edges(None, parent.right)
+                        elif parent.right == left:
+                            self.cards[card] = Edges(parent.left, None)
+
+                    if right in (parent := self.cards[card]):
+                        if parent.left == right:
+                            self.cards[card] = Edges(None, parent.right)
+                        elif parent.right == right:
+                            self.cards[card] = Edges(parent.left, None)
+
+                # Remove the cards
+                del self.cards[left]
+                del self.cards[right]
+            case (MoveType.BoardMatch, (king,)):
+                # Find the cards and ensure they can be moved
+                if king not in self.cards:
+                    raise CardNotFound()
+                if self.cards[king]:
+                    raise IllegalMove("Card is blocked by other cards")
+
+                # Remove blocks from cards above
+                for card in self.cards:
+                    if king in (parent := self.cards[card]):
+                        if parent.left == king:
+                            self.cards[card] = Edges(None, parent.right)
+                        elif parent.right == king:
+                            self.cards[card] = Edges(parent.left, None)
+
+                # Remove the cards
+                del self.cards[king]
+            case MoveType.BoardStackMatch:
+                pass
+            case MoveType.StackMatch:
+                pass
+
+        self.moves += 1
+
+        return self.moves
+
+    def __repr__(self) -> str:
+        cards = [self.root_card]
+
+        indent = 7
+        lines = []
+        while any(card is not None for card in cards):
+            next_cards = []
+            row = " " * indent
+            indent -= 1
+            for card in cards:
+                if card:
+                    row += f"{card.value} "
+                    next_cards.append(self.cards[card].left)
+                else:
+                    row += "  "
+                    next_cards.append(None)
+            # Add the far right based on last card
+            if cards[-1]:
+                next_cards.append(self.cards[cards[-1]].right)
+
+            lines.append(row.rstrip())
+            cards = next_cards
+
+        # Show the stack in the top line, right corner
+        left_card = self.stack.prev
+        right_card = self.stack.peek
+
+        lines[0] += f" {left_card.value if left_card else ' '} {right_card.value}"
+
+        return "\n".join(lines)
+
+    def __str__(self) -> str:
+        return f"<Board ({self.moves} moves)>"

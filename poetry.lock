@@ -126,7 +126,7 @@ files = [
 name = "commonmark"
 version = "0.9.1"
 description = "Python parser for the CommonMark Markdown spec"
-category = "dev"
+category = "main"
 optional = false
 python-versions = "*"
 files = [
@@ -558,7 +558,7 @@ files = [
 name = "pygments"
 version = "2.14.0"
 description = "Pygments is a syntax highlighting package written in Python."
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.6"
 files = [
@@ -652,7 +652,7 @@ rich = ">=8.0.0"
 name = "rich"
 version = "13.0.0"
 description = "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal"
-category = "dev"
+category = "main"
 optional = false
 python-versions = ">=3.7.0"
 files = [
@@ -758,4 +758,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "0d50507625c418443ac9df3e7b2f1bb43c31fd4abc389dae8140d9d9d2fa3cf6"
+content-hash = "3ced5662fb53bc3de4ef7f7ebdb611b26a93a0a9744da3635b02d73eecf42088"
