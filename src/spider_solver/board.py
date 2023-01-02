@@ -13,8 +13,9 @@ nodes pointing at it.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import Enum
-from typing import NamedTuple, Optional, Self, TypeAlias
+from typing import NamedTuple, Optional, Self, TypeAlias, Union
 
 
 class SpiderException(Exception):
@@ -67,6 +68,14 @@ class Card:
         The king will return the value 0, which means it can match by itself
         """
         return (13 - self.num) or 13
+
+    @property
+    def on_board(self) -> bool:
+        """Whether the card is on the playing board or not
+
+        If False, the card is in the stack
+        """
+        return self.row is not None and self.col is not None
 
     @property
     def pos(self) -> str:
@@ -199,6 +208,22 @@ class Stack:
                 )
         return moves
 
+    def remove_cards(self, cards: Union[Card, Sequence[Card]]) -> None:
+        """Remove a visible card from the stack"""
+        if isinstance(cards, Card):
+            cards = [cards]
+
+        for card in cards:
+            if self.prev is not card and self.peek is not card:
+                raise IllegalMove("Unable to remove card, it's not visible from the stack")
+
+        for card in cards:
+            if self.prev is card:
+                # Shift the index back as we are removing a card prior to the current idx
+                self.idx -= 1
+
+            self.cards.remove(card)
+
     def __repr__(self) -> str:
         cards = [
             str(card.num) for card in self.cards[self.idx :] + self.cards[: self.idx]
@@ -287,7 +312,7 @@ class Board:
             ):
                 if leaf.num > match.num:
                     leaf, match = match, leaf
-                if leaf == match:
+                if leaf is match:
                     # It's a king
                     moves.add((MoveType.BoardMatch, 0, (leaf,)))
                 else:
@@ -321,56 +346,58 @@ class Board:
             self.stack.draw(draws)
             self.moves += draws
 
+        # TODO: No need to use types, given that we can just check if cards are on board or stack
         match (move_type, cards):
-            case (MoveType.BoardMatch, (left, right)):
-                # Find the cards and ensure they can be moved
-                if left not in self.cards or right not in cards:
-                    raise CardNotFound()
-                if self.cards[left] or self.cards[right]:
-                    raise IllegalMove("Cards are blocked by other cards")
+            case (MoveType.BoardMatch, cards):
+                self._remove_cards(cards)
+            case (MoveType.BoardStackMatch, (board_card, stack_card)):
+                if not board_card.on_board ^ stack_card.on_board:
+                    raise SpiderException("Expected one card to be on board and other on stack")
 
-                # Remove blocks from cards above
-                for card in self.cards:
-                    if left in (parent := self.cards[card]):
-                        if parent.left == left:
-                            self.cards[card] = Edges(None, parent.right)
-                        elif parent.right == left:
-                            self.cards[card] = Edges(parent.left, None)
+                if not board_card.on_board:
+                    # Flip them around to be correct
+                    board_card, stack_card = stack_card, board_card
 
-                    if right in (parent := self.cards[card]):
-                        if parent.left == right:
-                            self.cards[card] = Edges(None, parent.right)
-                        elif parent.right == right:
-                            self.cards[card] = Edges(parent.left, None)
+                if stack_card is not self.stack.peek and stack_card is not self.stack.prev:
+                    raise IllegalMove("Unable to match a stack card that isn't visible")
 
-                # Remove the cards
-                del self.cards[left]
-                del self.cards[right]
-            case (MoveType.BoardMatch, (king,)):
-                # Find the cards and ensure they can be moved
-                if king not in self.cards:
-                    raise CardNotFound()
-                if self.cards[king]:
-                    raise IllegalMove("Card is blocked by other cards")
+                # Remove the stack card from the stack
+                self.stack.remove_cards(stack_card)
 
-                # Remove blocks from cards above
-                for card in self.cards:
-                    if king in (parent := self.cards[card]):
-                        if parent.left == king:
-                            self.cards[card] = Edges(None, parent.right)
-                        elif parent.right == king:
-                            self.cards[card] = Edges(parent.left, None)
-
-                # Remove the cards
-                del self.cards[king]
-            case MoveType.BoardStackMatch:
-                pass
-            case MoveType.StackMatch:
-                pass
+                # Remove the board card from the board
+                self._remove_cards(board_card)
+            case (MoveType.StackMatch, cards):
+                self.stack.remove_cards(cards)
+            case _:
+                raise IllegalMove("Unmatched move")
 
         self.moves += 1
 
         return self.moves
+
+    def _remove_cards(self, cards_to_remove: Union[Card, Sequence[Card]]) -> None:
+        if isinstance(cards_to_remove, Card):
+            cards_to_remove = [cards_to_remove]
+
+        # Validate
+        for card in cards_to_remove:
+            # Find the cards and ensure they can be moved
+            if card not in self.cards:
+                raise CardNotFound()
+            if self.cards[card]:
+                raise IllegalMove("Card is blocked by other cards")
+
+        # Remove blocks from cards above
+        for card_to_remove in cards_to_remove:
+            for card in self.cards:
+                if card_to_remove in (parent := self.cards[card]):
+                    if parent.left is card_to_remove:
+                        self.cards[card] = Edges(None, parent.right)
+                    elif parent.right is card_to_remove:
+                        self.cards[card] = Edges(parent.left, None)
+
+            # Remove the cards
+            del self.cards[card_to_remove]
 
     def __repr__(self) -> str:
         cards = [self.root_card]
@@ -399,7 +426,7 @@ class Board:
         left_card = self.stack.prev
         right_card = self.stack.peek
 
-        lines[0] += f" {left_card.value if left_card else ' '} {right_card.value}"
+        lines[0] += f"  {left_card.value if left_card else ' '} {right_card.value}"
 
         return "\n".join(lines)
 

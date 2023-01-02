@@ -43,8 +43,7 @@ def test_stack_get_card_at_draws():
     assert stack.get_card_at_draws(1).num == 2
     assert stack.get_card_at_draws(2).num == 5
 
-    stack.draw()
-    stack.draw()
+    stack.draw(2)
 
     assert stack.get_card_at_draws(0).num == 5
     assert stack.get_card_at_draws(1).num == 6
@@ -62,9 +61,7 @@ def test_stack_get_stack_moves():
     assert (MoveType.StackMatch, 3, (cards[2], cards[3])) in moves
     assert (MoveType.StackMatch, 6, (cards[5], cards[6])) in moves
 
-    stack.draw()
-    stack.draw()
-    stack.draw()
+    stack.draw(3)
 
     moves = stack.get_stack_moves()
 
@@ -83,3 +80,36 @@ def test_stack_get_stack_moves_with_a_king():
     assert (MoveType.StackMatch, 2, (cards[2],)) in moves
     assert (MoveType.StackMatch, 5, (cards[5],)) in moves
     assert (MoveType.StackMatch, 6, (cards[6],)) in moves
+
+def test_stack_remove_card():
+    cards = [Card(i) for i in [1, 2, 3, 4, 5, 6]]
+    stack = Stack(cards)
+
+    assert str(stack) == "<Stack 1 2 3 4 5 6>"
+    assert stack.peek.num == 1
+    assert stack.prev is None
+
+    # Remove the top card
+    stack.remove_cards(stack.get_card_at_draws(0))
+
+    assert str(stack) == "<Stack 2 3 4 5 6>"
+    assert stack.peek.num == 2
+    assert stack.prev is None
+
+    stack.draw(2)
+
+    assert str(stack) == "<Stack 4 5 6 2 3>"
+
+    assert stack.peek.num == 4
+    assert stack.prev is not None
+    assert stack.prev.num == 3
+
+    # Remove the three, which is at the "back of the stack", but is actually still visible in the game
+    card = stack.get_card_at_draws(4)
+    assert card.num == 3
+    stack.remove_cards(card)
+
+    assert str(stack) == "<Stack 4 5 6 2>"
+    assert stack.peek.num == 4
+    assert stack.prev is not None
+    assert stack.prev.num == 2

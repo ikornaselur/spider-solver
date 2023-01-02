@@ -39,7 +39,7 @@ def test_board_get_moves(board: Board):
 def test_board_play_move(board: Board):
     assert repr(board) == "\n".join(
         [
-            "       8   6",
+            "       8    6",
             "      7 5",
             "     D A 4",
             "    J 7 A 6",
@@ -57,7 +57,7 @@ def test_board_play_move(board: Board):
 
     assert repr(board) == "\n".join(
         [
-            "       8   6",
+            "       8    6",
             "      7 5",
             "     D A 4",
             "    J 7 A 6",
@@ -73,12 +73,66 @@ def test_board_play_move(board: Board):
 
     assert repr(board) == "\n".join(
         [
-            "       8   6",
+            "       8    6",
             "      7 5",
             "     D A 4",
             "    J 7 A 6",
             "   D 3 A D 7",
             "  6 2 0 5   9",
             " 5 2 0 4     3",
+        ]
+    )
+
+    # Remove the 10 and 3 next
+    ten = next(card for card in board.cards if card.row == 6 and card.col == 2)
+    three = next(card for card in board.cards if card.row == 6 and card.col == 6)
+
+    board.play_move((MoveType.BoardMatch, 0, (ten, three)))
+
+    assert repr(board) == "\n".join(
+        [
+            "       8    6",
+            "      7 5",
+            "     D A 4",
+            "    J 7 A 6",
+            "   D 3 A D 7",
+            "  6 2 0 5   9",
+            " 5 2   4",
+        ]
+    )
+
+    # And then the 4 and 9
+    four = next(card for card in board.cards if card.row == 6 and card.col == 3)
+    nine = next(card for card in board.cards if card.row == 5 and card.col == 5)
+
+    board.play_move((MoveType.BoardMatch, 0, (four, nine)))
+
+    assert repr(board) == "\n".join(
+        [
+            "       8    6",
+            "      7 5",
+            "     D A 4",
+            "    J 7 A 6",
+            "   D 3 A D 7",
+            "  6 2 0 5",
+            " 5 2",
+        ]
+    )
+
+    # And now we start matching from the stack, 7 on the board with 6 from the stack
+    seven = next(card for card in board.cards if card.row == 4 and card.col == 4)
+    six = board.stack.peek
+
+    board.play_move((MoveType.BoardStackMatch, 0, (seven, six)))
+
+    assert repr(board) == "\n".join(
+        [
+            "       8    8",
+            "      7 5",
+            "     D A 4",
+            "    J 7 A 6",
+            "   D 3 A D",
+            "  6 2 0 5",
+            " 5 2",
         ]
     )
