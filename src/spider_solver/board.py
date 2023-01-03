@@ -31,7 +31,6 @@ class CardNotFound(SpiderException):
     pass
 
 
-
 class Card:
     num: int  # The value of the card from 1 to 13
 
@@ -271,6 +270,15 @@ class Board:
                 raise ValueError(
                     "Number of cards per row needs to match the 1-indexed row number"
                 )
+            if sum(len(row) for row in rows) + len(stack) != 52:
+                raise ValueError("Expected 52 cards")
+            # Check counts of all 13 sorts is 4
+            card_vals = Counter([num for row in rows for num in row] + stack)
+            if len(card_vals) != 13:
+                raise ValueError("Expected 13 sorts")
+            if any(count != 4 for count in card_vals.values()):
+                raise ValueError("Not all sorts are 4 counts")
+
 
         self.moves = 0
         self.cards = {}

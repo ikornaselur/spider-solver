@@ -20,6 +20,7 @@ def unique_board() -> Iterable[Board]:
             [22, 23, 24, 25, 26, 27, 28],  # noqa
         ],
         stack=[29, 30, 31, 32],
+        _validate=False,
     )
     # fmt: on
 
