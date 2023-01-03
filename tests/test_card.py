@@ -6,9 +6,9 @@ def test_card_init():
 
     assert str(stack_card) == "<Card K: In stack>"
 
-    board_card = Card(1, row=2, col=3)
+    board_card = Card(1)
 
-    assert str(board_card) == "<Card A: On board 3rd row, 4th card>"
+    assert str(board_card) == "<Card A: In stack>"
 
 
 def test_card_match():

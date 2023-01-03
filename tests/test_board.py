@@ -5,7 +5,7 @@ def test_board_init(unique_board: Board):
     board = unique_board
     # Just checking basic stuff
     assert len(board.cards) == 28
-    assert len(board.stack.cards) == 4
+    assert len(board.stack.cards) == 5  # Including the empty space at the back
 
     # There should be no cards pointing at the top card
     for edges in board.cards.values():
@@ -194,6 +194,7 @@ def test_board_play_move(board: Board):
     # And now we start matching from the stack, 7 on the board with 6 from the stack
     seven = next(card for card in board.cards if card.row == 4 and card.col == 4)
     six = board.stack.peek
+    assert six is not None
 
     board.play_move((MoveType.BoardStackMatch, 0, (seven, six)))
 

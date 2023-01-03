@@ -31,6 +31,7 @@ class CardNotFound(SpiderException):
     pass
 
 
+
 class Card:
     num: int  # The value of the card from 1 to 13
 
@@ -126,26 +127,32 @@ class Stack:
     changing the order itself
     """
 
-    cards: list[Card]
+    cards: list[Optional[Card]]
     idx: int
 
-    def __init__(self, cards: list[Card]) -> None:
+    def __init__(self, cards: list[Optional[Card]]) -> None:
         self.cards = cards
+        self.cards.append(None)  # We cna draw past the last card
         self.idx = 0
 
     @classmethod
     def from_ints(cls, cards: list[int]) -> Self:
         return cls([Card(num) for num in cards])
 
-    def draw(self, count: int = 1) -> Card:
+    def draw(self, count: int = 1) -> Optional[Card]:
         """Draw the next card and return what card is now at the top"""
         self.idx = (self.idx + count) % len(self.cards)
 
         return self.peek
 
     @property
-    def peek(self) -> Card:
-        """Peek at the top card without drawing a new one"""
+    def peek(self) -> Optional[Card]:
+        """Peek at the top card without drawing a new one
+
+        None if the stack is empty
+        """
+        if not self.cards:
+            return None
         return self.cards[self.idx]
 
     @property
@@ -160,7 +167,7 @@ class Stack:
 
         return self.cards[self.idx - 1]
 
-    def get_card_at_draws(self, draws: int) -> Card:
+    def get_card_at_draws(self, draws: int) -> Optional[Card]:
         """Return the card that would be at the top after this many draws"""
         return self.cards[(self.idx + draws) % len(self.cards)]
 
@@ -182,7 +189,7 @@ class Stack:
         if self.prev is not None and self.prev.num == num:
             draws_for_num.append(-1)
         for idx, card in enumerate(curr_order):
-            if card.num == num:
+            if card is not None and card.num == num:
                 draws_for_num.append(idx)
 
         return draws_for_num
@@ -191,7 +198,7 @@ class Stack:
         moves = set()
         # Check for any pairs in the stack
         for idx, (left, right) in enumerate(zip(self.cards, self.cards[1:])):
-            if right.num == 13:
+            if right is not None and right.num == 13:
                 moves.add(
                     (
                         MoveType.StackMatch,
@@ -199,7 +206,7 @@ class Stack:
                         (right,),
                     )
                 )
-            elif left.match == right.num:
+            elif left is not None and right is not None and left.match == right.num:
                 moves.add(
                     (
                         MoveType.StackMatch,
@@ -211,6 +218,8 @@ class Stack:
 
     def remove_cards(self, cards: Union[Card, Sequence[Card]]) -> None:
         """Remove a visible card from the stack"""
+        if cards is None:
+            raise IllegalMove("Can not remove the empty None slot at the back")
         if isinstance(cards, Card):
             cards = [cards]
 
@@ -224,12 +233,15 @@ class Stack:
             if self.prev is card:
                 # Shift the index back as we are removing a card prior to the current idx
                 self.idx -= 1
+            # if self.peek is card and self.idx:
+            # We are removing the current card,
 
             self.cards.remove(card)
 
     def __repr__(self) -> str:
         cards = [
-            str(card.num) for card in self.cards[self.idx :] + self.cards[: self.idx]
+            str(card.num) if card else "X"
+            for card in self.cards[self.idx :] + self.cards[: self.idx]
         ]
         return f"<Stack {' '.join(cards)}>"
 
@@ -326,7 +338,7 @@ class Board:
         # Get cards that only have 1 count left
         card_counts = Counter(
             [card.num for card in self.cards.keys()]
-            + [card.num for card in self.stack.cards]
+            + [card.num for card in self.stack.cards if card]
         )
         solo_cards = {key for key, val in card_counts.items() if val == 1}
 
@@ -356,19 +368,17 @@ class Board:
             for idx in idxs:
                 if leaf.num in solo_cards and idx <= 0:
                     # We should get rid of it ASAP
-                    return {
-                        (
-                            MoveType.BoardStackMatch,
-                            max(idx, 0),
-                            (leaf, self.stack.get_card_at_draws(idx)),
+                    stack_card = self.stack.get_card_at_draws(idx)
+                    if stack_card is None:
+                        raise SpiderException(
+                            "Incorrectly matched the empty spot in the stack"
                         )
-                    }
+                    return {(MoveType.BoardStackMatch, max(idx, 0), (leaf, stack_card))}
+                # Left side of visible stack card is -1, no need to draw, hence max()
                 moves.add(
                     (
                         MoveType.BoardStackMatch,
-                        max(
-                            idx, 0
-                        ),  # Left side of visible stack card is -1, no need to draw
+                        max(idx, 0),
                         (leaf, self.stack.get_card_at_draws(idx)),
                     )
                 )
@@ -455,6 +465,8 @@ class Board:
             del self.cards[card_to_remove]
 
     def __repr__(self) -> str:
+        if not self.cards:
+            return "Finished!"
         cards = [self.root_card]
 
         indent = 7
@@ -481,7 +493,9 @@ class Board:
         left_card = self.stack.prev
         right_card = self.stack.peek
 
-        lines[0] += f"  {left_card.value if left_card else ' '} {right_card.value}"
+        lines[
+            0
+        ] += f"  {left_card.value if left_card else ' '} {right_card.value if right_card else ' '}"
 
         return "\n".join(lines)
 
