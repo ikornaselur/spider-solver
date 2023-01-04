@@ -16,7 +16,8 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Sequence
 from enum import Enum
-from typing import NamedTuple, Optional, Self, TypeAlias, Union
+from typing import NamedTuple, Optional, TypeAlias, Union
+from typing_extensions import Self
 
 
 class SpiderException(Exception):
@@ -176,6 +177,7 @@ class Stack:
         If the card is visible as the previous card, it will be indicated as
         -1, to differentiate between the left and right visible cards
         # XXX: Is this a good idea?
+        # INFO: It did work out in hte end, so I think it was a good idea?
         """
         if self.idx == 0:
             # Whole stack is just in order, only one visible card
@@ -419,6 +421,7 @@ class Board:
             self.moves += draws
 
         # TODO: No need to use types, given that we can just check if cards are on board or stack
+        # NOTE: That might be slower though?
         match (move_type, cards):
             case (MoveType.BoardMatch, cards):
                 self._remove_cards(cards)
