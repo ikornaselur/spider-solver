@@ -249,6 +249,10 @@ class Edges(NamedTuple):
     left: Optional[Card]
     right: Optional[Card]
 
+    @property
+    def edge_state(self) -> str:
+        return f"{self.left.value if self.left else '_'}:{self.right.value if self.right else '_'}"
+
     def __len__(self) -> int:
         return 1 if self.left else 0 + 1 if self.right else 0
 
@@ -276,9 +280,9 @@ class Board:
             card_vals = Counter([num for row in rows for num in row] + stack)
             if len(card_vals) != 13:
                 raise ValueError("Expected 13 sorts")
-            if any(count != 4 for count in card_vals.values()):
-                raise ValueError("Not all sorts are 4 counts")
-
+            mis_match_counts = [key for key,val in card_vals.items() if val != 4]
+            if any(mis_match_counts):
+                raise ValueError(f"Not all sorts are 4 counts: {mis_match_counts}")
 
         self.moves = 0
         self.cards = {}
@@ -471,6 +475,16 @@ class Board:
 
             # Remove the cards
             del self.cards[card_to_remove]
+
+    @property
+    def state(self) -> str:
+        moves = str(self.moves)
+        card_state = "".join(
+            [f"{card.value}:{val.edge_state}" for card, val in self.cards.items()]
+        )
+        stack_state = "".join([card.value for card in self.stack.cards if card])
+        stack_idx = str(self.stack.idx)
+        return "|".join([moves, card_state, stack_idx, stack_state])
 
     def __repr__(self) -> str:
         if not self.cards:
