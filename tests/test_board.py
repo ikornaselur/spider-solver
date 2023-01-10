@@ -1,4 +1,5 @@
-from spider_solver.board import Board, MoveType
+from spider_solver.board import Board, Edges, MoveType
+from spider_solver.card import Card
 
 
 def test_board_init(unique_board: Board):
@@ -209,3 +210,70 @@ def test_board_play_move(board: Board):
             " 5 2",
         ]
     )
+
+
+def test_get_moves_doesnt_provide_obvious_bad_moves_deadlock():
+    """Run analyse on level 1
+
+    Move at 20 moves is to match 3 + 10, both on the stack. This puts the game
+    in a bad state, because there is a 3 blocked by 10 on the game board and
+    there are no 3 left to match with that 10 on the board.
+
+    This move should not be offered at 20 moves! Figure out how to set up that
+    state easily in a test and then assert the move isn't given..
+    """
+
+    # Initialise a board state that is known to have a deadlock move available
+    board = Board(rows=[], stack=[6, 6, 8, 8, 12, 4, 10, 3, 1, 13, 9, 5], _validate=False)
+    board.stack.idx = 7
+
+    board.cards = {}
+
+    A = 1
+    J = 11
+    D = 12
+    K = 13
+    _ = None
+
+    # fmt: off
+    rows = [
+              [8],
+             [7, 6],  # noqa
+            [D, A, 4],  # noqa
+           [J, 7, A, 6],  # noqa
+          [D, 3, A, D, 7],  # noqa
+         [_, _, 0, 5, K, 9],  # noqa
+        [_, _, _, _, 2, _, _],  # noqa
+    ]
+    # fmt: on
+
+    for row in range(6, -1, -1):
+        for col, card in enumerate(rows[row]):
+            if card is None:
+                continue
+            if card == 0:
+                card = 10
+
+            card = Card(card, row, col)
+            rows[row][col] = card
+
+            if row == 6:  # Bottom row
+                board.cards[card] = Edges(None, None)
+            else:  # Any other row
+                board.cards[card] = Edges(rows[row + 1][col], rows[row + 1][col + 1])
+
+            if row == 0 and col == 0:
+                board.root_card = card
+
+    moves = board.get_moves()
+
+    # At this point, if we match 0 and 3 that are visible in the stack, we can
+    # not finish the game. This move will leave only a single pair of 10 + 3 in
+    # the game and they are both on the table. The 10 is blocked by 3 at this
+    # point, so game is impossible.
+
+    # Ensure we have no 0 draw StackMatch moves, which would be to match the 10
+    # and 3 on the stack
+    bad_moves = [m for m in moves if m[1] == 0 and m[0] == MoveType.StackMatch]
+
+    assert not bad_moves
