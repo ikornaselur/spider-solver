@@ -160,7 +160,16 @@ def test_board_play_move(board: Board):
     ten = next(card for card in board.cards if card.row == 6 and card.col == 2)
     three = next(card for card in board.cards if card.row == 6 and card.col == 6)
 
+    # Also check that the three in row 5 gets unblocked by the ten we remove
+    blocked_three = next(
+        card for card in board.cards if card.row == 4 and card.col == 1
+    )
+    assert len(board.blocked_by[blocked_three]) == 2
+    assert ten in board.blocked_by[blocked_three]
+
     board.play_move((MoveType.BoardMatch, 0, (ten, three)))
+
+    assert ten not in board.blocked_by[blocked_three]
 
     assert repr(board) == "\n".join(
         [
@@ -197,7 +206,14 @@ def test_board_play_move(board: Board):
     six = board.stack.peek
     assert six is not None
 
+    # Also check that the 6 in row 4 gets completely unblocked
+    blocked_six = next(card for card in board.cards if card.row == 3 and card.col == 3)
+    assert seven in board.blocked_by[blocked_six]
+
     board.play_move((MoveType.BoardStackMatch, 0, (seven, six)))
+
+    # No longer blocked by anything!
+    assert blocked_six not in board.blocked_by
 
     assert repr(board) == "\n".join(
         [
@@ -212,6 +228,50 @@ def test_board_play_move(board: Board):
     )
 
 
+def test_board_init_sets_up_blocked_by(board: Board) -> None:
+    """
+          8
+         7 5
+        D A 4
+       J 7 A 6
+      D 3 A D 7
+     6 2 0 5 K 9
+    5 2 0 4 2 J 3
+    """
+    assert len(board.blocked_by) == 9
+
+    def check_at(row: int, col: int, num: int, count: int) -> None:
+        card = board.get_card_at_row_col(row, col)
+        assert card
+        assert card.num == num
+        assert len(blocks := board.blocked_by[card]) == count
+        assert all(block_card.num == card.match for block_card in blocks)
+
+    # The root card, 8, should be blocked by all three 5 cards
+    check_at(0, 0, 8, 3)
+
+    # 7 in 2nd row is blocked by a 6 in the 6th row
+    check_at(1, 0, 7, 1)
+
+    # D in 3rd row is blocked by an A in 5th row
+    check_at(2, 0, 12, 1)
+
+    # A in 3rd row is blocked by a D in 5th row
+    check_at(2, 1, 1, 1)
+
+    # J in 4th row
+    check_at(3, 0, 11, 2)
+
+    # A in 4th row
+    check_at(3, 2, 1, 1)
+
+    # 6 in 4th row
+    check_at(3, 3, 6, 1)
+
+    # 3 in 5th row
+    check_at(4, 1, 3, 2)
+
+
 def test_get_moves_doesnt_provide_obvious_bad_moves_deadlock():
     """Run analyse on level 1
 
@@ -224,7 +284,9 @@ def test_get_moves_doesnt_provide_obvious_bad_moves_deadlock():
     """
 
     # Initialise a board state that is known to have a deadlock move available
-    board = Board(rows=[], stack=[6, 6, 8, 8, 12, 4, 10, 3, 1, 13, 9, 5], _validate=False)
+    board = Board(
+        rows=[], stack=[6, 6, 8, 8, 12, 4, 10, 3, 1, 13, 9, 5], _validate=False
+    )
     board.stack.idx = 7
 
     board.cards = {}
@@ -264,6 +326,9 @@ def test_get_moves_doesnt_provide_obvious_bad_moves_deadlock():
 
             if row == 0 and col == 0:
                 board.root_card = card
+
+    # Populate the blocks
+    board._walk(board.root_card)
 
     moves = board.get_moves()
 

@@ -1,17 +1,15 @@
-from typing import Optional
-
 from spider_solver.board import Card, MoveType, Stack
 
 
 def test_stack_init():
-    cards: list[Optional[Card]] = [Card(i) for i in range(1, 5)]
+    cards: list[Card | None] = [Card(i) for i in range(1, 5)]
     stack = Stack(cards)
 
     assert str(stack) == "<Stack 1 2 3 4 X>"
 
 
 def test_stack_draw():
-    cards: list[Optional[Card]] = [Card(i) for i in range(1, 5)]
+    cards: list[Card | None] = [Card(i) for i in range(1, 5)]
     stack = Stack(cards)
 
     card = stack.peek
@@ -28,7 +26,7 @@ def test_stack_draw():
 
 
 def test_stack_draw_last_as_none():
-    cards: list[Optional[Card]] = [Card(i) for i in [1, 2, 3]]
+    cards: list[Card | None] = [Card(i) for i in [1, 2, 3]]
     stack = Stack(cards)
 
     stack.draw(2)
@@ -44,7 +42,7 @@ def test_stack_draw_last_as_none():
 
 
 def test_stack_num_in_stack():
-    cards: list[Optional[Card]] = [
+    cards: list[Card | None] = [
         Card(i) for i in [1, 2, 5, 6, 2, 1]
     ]
     stack = Stack(cards)
@@ -58,7 +56,7 @@ def test_stack_num_in_stack():
 
 
 def test_stack_get_card_at_draws():
-    cards: list[Optional[Card]] = [
+    cards: list[Card | None] = [
         Card(i) for i in [1, 2, 5, 6, 2, 1]
     ]
     stack = Stack(cards)
@@ -87,7 +85,7 @@ def test_stack_get_card_at_draws():
 
 
 def test_stack_get_stack_moves():
-    cards: list[Optional[Card]] = [
+    cards: list[Card | None] = [
         Card(i) for i in [1, 2, 11, 2, 6, 1, 12, 5]
     ]
     stack = Stack(cards)
@@ -110,7 +108,7 @@ def test_stack_get_stack_moves():
 
 
 def test_stack_get_stack_moves_with_a_king():
-    cards: list[Optional[Card]] = [
+    cards: list[Card | None] = [
         Card(i) for i in [1, 2, 13, 4, 5, 13, 13, 6]
     ]
     stack = Stack(cards)
@@ -123,7 +121,7 @@ def test_stack_get_stack_moves_with_a_king():
 
 
 def test_stack_remove_card():
-    cards: list[Optional[Card]] = [
+    cards: list[Card | None] = [
         Card(i) for i in [1, 2, 3, 4, 5, 6]
     ]
     stack = Stack(cards)
@@ -166,7 +164,7 @@ def test_stack_remove_card():
 
 
 def test_stack_remove_all_cards():
-    cards: list[Optional[Card]] = [Card(i) for i in [1, 2, 3]]
+    cards: list[Card | None] = [Card(i) for i in [1, 2, 3]]
     stack = Stack(cards)
 
     assert str(stack) == "<Stack 1 2 3 X>"

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Optional, Union
 
 from typing_extensions import Self
 
@@ -17,10 +16,10 @@ class Stack:
     changing the order itself
     """
 
-    cards: list[Optional[Card]]
+    cards: list[Card | None]
     idx: int
 
-    def __init__(self, cards: list[Optional[Card]]) -> None:
+    def __init__(self, cards: list[Card | None]) -> None:
         self.cards = cards
         self.cards.append(None)  # We cna draw past the last card
         self.idx = 0
@@ -29,14 +28,14 @@ class Stack:
     def from_ints(cls, cards: list[int]) -> Self:
         return cls([Card(num) for num in cards])
 
-    def draw(self, count: int = 1) -> Optional[Card]:
+    def draw(self, count: int = 1) -> Card | None:
         """Draw the next card and return what card is now at the top"""
         self.idx = (self.idx + count) % len(self.cards)
 
         return self.peek
 
     @property
-    def peek(self) -> Optional[Card]:
+    def peek(self) -> Card | None:
         """Peek at the top card without drawing a new one
 
         None if the stack is empty
@@ -46,7 +45,7 @@ class Stack:
         return self.cards[self.idx]
 
     @property
-    def prev(self) -> Optional[Card]:
+    def prev(self) -> Card | None:
         """The previous card, if the top one is now being shown
 
         Two cards are shown at the same time in the Solitare, allowing the user
@@ -57,7 +56,7 @@ class Stack:
 
         return self.cards[self.idx - 1]
 
-    def get_card_at_draws(self, draws: int) -> Optional[Card]:
+    def get_card_at_draws(self, draws: int) -> Card | None:
         """Return the card that would be at the top after this many draws"""
         return self.cards[(self.idx + draws) % len(self.cards)]
 
@@ -107,7 +106,7 @@ class Stack:
                 )
         return moves
 
-    def remove_cards(self, cards: Union[Card, Sequence[Card]]) -> None:
+    def remove_cards(self, cards: Card | Sequence[Card]) -> None:
         """Remove a visible card from the stack"""
         if cards is None:
             raise IllegalMove("Can not remove the empty None slot at the back")

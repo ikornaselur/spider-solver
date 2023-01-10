@@ -1,18 +1,16 @@
 from __future__ import annotations
 
-from typing import Optional
-
 
 class Card:
     num: int  # The value of the card from 1 to 13
 
     # Position metadata to identify duplicates. If not set, it could be in a
     # stack instead of the main board
-    row: Optional[int]
-    col: Optional[int]
+    row: int | None
+    col: int | None
 
     def __init__(
-        self, num: int, row: Optional[int] = None, col: Optional[int] = None
+        self, num: int, row: int | None = None, col: int | None = None
     ) -> None:
         self.num = num
         self.row = row

@@ -74,13 +74,20 @@ def main():
     # Then fallback to 2
     top_moves = 2
 
-    solution = simulate(
+    (solution, solution_trie) = simulate(
         initial_board,
         known_min_moves=game["known_min_moves"],
         top_moves=top_moves,
         first_top_moves=first_top_moves,
         first_games=first_games,
     )
+
+    """
+    with open("solution_trie.json", "w") as f:
+        json.dump(solution_trie, f, indent=2)
+
+    """
+
     describe_solution(initial_board, solution)
 
 

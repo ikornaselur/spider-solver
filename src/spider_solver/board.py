@@ -13,9 +13,9 @@ nodes pointing at it.
 """
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Sequence
-from typing import NamedTuple, Optional, Union
+from typing import NamedTuple
 
 from spider_solver.card import Card
 from spider_solver.exceptions import CardNotFound, IllegalMove, SpiderException
@@ -24,8 +24,8 @@ from spider_solver.types import Move, MoveType
 
 
 class Edges(NamedTuple):
-    left: Optional[Card]
-    right: Optional[Card]
+    left: Card | None
+    right: Card | None
 
     @property
     def edge_state(self) -> str:
@@ -40,6 +40,7 @@ class Board:
     cards: dict[Card, Edges]
     root_card: Card
     moves: int
+    blocked_by: defaultdict[Card, set[Card]]
 
     def __init__(
         self, rows: list[list[int]], stack: list[int], _validate: bool = True
@@ -64,6 +65,7 @@ class Board:
 
         self.moves = 0
         self.cards = {}
+        self.blocked_by = defaultdict(set)
 
         # Keep track of references to the cards from the row/column tuple to create the edges
         row_to_card_map: dict[tuple[int, int], Card] = {}
@@ -88,11 +90,47 @@ class Board:
                         card, self.cards[right_parent].right
                     )
 
+        if hasattr(self, "root_card"):
+            # Special test case.. it's just easy like this
+            self._walk(self.root_card)
+
         self.stack = Stack.from_ints(stack)
+
+    def _walk(self, card: Card, seen: set[Card] | None = None) -> None:
+        """Run through the card graph and make note of any cards that are blocked by others
+
+        A card is considered blocked by another card if they would match each
+        other and you can reach the lower card through the graph from the
+        upper card. This means that if you have the following board:
+            3
+           2  5
+          7 10 11
+        Then the 3 is blocked by 10, but the 2 is not blocked by 11
+        """
+        if seen is None:
+            seen = set()
+
+        for seen_card in seen:
+            if card.match == seen_card.num:
+                self.blocked_by[seen_card].add(card)
+
+        if card.num < 13:
+            seen.add(card)
+
+        edges = self.cards[card]
+        if edges.left is not None:
+            self._walk(edges.left, seen.copy())
+        if edges.right is not None:
+            self._walk(edges.right, seen.copy())
 
     @property
     def leaves(self) -> set[Card]:
         return set(card for card, edges in self.cards.items() if len(edges) == 0)
+
+    def get_card_at_row_col(self, row: int, col: int) -> Card | None:
+        for card in self.cards:
+            if card.row == row and card.col == col:
+                return card
 
     def get_moves(self) -> set[Move]:
         """Calculate all moves that are possible in the current state
@@ -121,7 +159,7 @@ class Board:
                 - If they're in the stack, only give them as the only option if
                   the only alternatives are to draw anyway
                 - If removing cards locks other cards in the graph, it's not a
-                  valid move! # TODO This
+                  valid move!
         """
         moves = set()
 
@@ -175,6 +213,7 @@ class Board:
 
         # Check for any moves that match in the stack
         stack_moves = self.stack.get_stack_moves()
+        bad_moves = set()
         for move_type, draws, cards in stack_moves:
             if (
                 draws == 0
@@ -184,9 +223,57 @@ class Board:
                 # This stack move is a solo move, but we should only return it
                 # IF there are no 0 draw moves already available
                 return {(move_type, draws, cards)}
+
+            # Check if the move would be a bad move.
+            if self._bad_move(move_type, cards, card_counts):
+                bad_moves.add((move_type, draws, cards))
+
         moves.update(stack_moves)
 
-        return moves
+        return moves - bad_moves
+
+    def _bad_move(
+        self,
+        move_type: MoveType,
+        cards: tuple[Card, Card],
+        card_counts: Counter[int],
+    ) -> bool:
+        """Check that if we play this move, would we put the baord in a bad state?
+
+        Known bad moves include causing the game to end up with a pair that blocks each other.
+        """
+        if move_type != MoveType.StackMatch:
+            raise NotImplementedError()
+
+        if len(cards) == 1:
+            # It's just a King - never a bad move!
+            return False
+
+        left_card, right_card = cards
+
+        if card_counts[left_card.num] > 2:
+            # Could be a bad move.. but not sure, let's just assume right now it isn't
+            return False
+
+        # Check if the remaining pair is on the table
+        left_table_card = next(
+            (card for card in self.cards if card.num == left_card.num), None
+        )
+        right_table_card = next(
+            (card for card in self.cards if card.num == right_card.num), None
+        )
+
+        if left_table_card is None or right_table_card is None:
+            # Shouldn't be a bad move?
+            return False
+
+        # Now check if one is blocked by the other?
+        if left_table_card in self.blocked_by or right_table_card in self.blocked_by:
+            # Pretty bad move!
+            return True
+
+        # Probably not a bad move?
+        return False
 
     def play_move(self, move: Move) -> int:
         """Play a move and return the current number of moves the board is at"""
@@ -231,7 +318,7 @@ class Board:
 
         return self.moves
 
-    def _remove_cards(self, cards_to_remove: Union[Card, Sequence[Card]]) -> None:
+    def _remove_cards(self, cards_to_remove: Card | Sequence[Card]) -> None:
         if isinstance(cards_to_remove, Card):
             cards_to_remove = [cards_to_remove]
 
@@ -252,7 +339,17 @@ class Board:
                     elif parent.right is card_to_remove:
                         self.cards[card] = Edges(parent.left, None)
 
-            # Remove the cards
+            # Also check if the card was blocking another
+            freed_cards = set()
+            for blocked_card, blocking_cards in self.blocked_by.items():
+                if card_to_remove in blocking_cards:
+                    blocking_cards.remove(card_to_remove)
+                if not blocking_cards:
+                    freed_cards.add(blocked_card)
+            for freed_card in freed_cards:
+                del self.blocked_by[freed_card]
+
+            # Remove the card
             del self.cards[card_to_remove]
 
     @property

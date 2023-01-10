@@ -1,5 +1,6 @@
 import copy
-from collections import Counter
+import time
+from collections import Counter, defaultdict
 from heapq import heappop as pop
 from heapq import heappush as push
 
@@ -49,6 +50,35 @@ def describe_solution(board: Board, solution: list[int]) -> None:
     console.print(f"[{board.moves}] [green]All done!")
 
 
+# It's turtles all the way
+def ddict():
+    return defaultdict(ddict)
+
+
+def add_solution(
+    trie: dict, moves_played: list[int], available_move_count: int, winning_state: int
+):
+    """Add board state to a solution trie
+
+    Board state is not the full board state, as it can easily be reconstructed
+    from the path, but rather just how many moves can be played at this state
+    and if the state is a winning state.
+
+    Number of moves is just an int from 0 to however many moves are available
+    Winning state is:
+        1 if winning state
+        0 if unknown
+        -1 if failed
+        -2 if number of moves exceeded known min count
+    """
+    trie_node = trie
+    for move in moves_played:
+        trie_node = trie_node[move]
+
+    trie_node["move_count"] = available_move_count
+    trie_node["winning_state"] = winning_state
+
+
 def simulate(
     initial_board: Board,
     *,
@@ -56,7 +86,7 @@ def simulate(
     top_moves: int = 2,
     first_top_moves: int = 3,
     first_games: int = 5,
-) -> list[int]:
+) -> tuple[list[int], dict]:
     """Simulate a board until a solution is found with the least amount of moves required
 
     known_min_moves: The current high score, used to optimise to not schedule
@@ -93,11 +123,16 @@ def simulate(
     # The heap ordered by current moves
     boards = [(0, [], initial_board)]
 
+    solution_trie = ddict()  # trie-ish?
+
+    now = time.time()
+
     while boards:
         _, moves_made, board = pop(boards)
+
         if board.moves > min_moves:
             console.log(
-                f"Testing games with {board.moves}/{known_min_moves} moves.. (total: {len(boards)}, dups: {dups})"
+                f"[{time.time() - now:.02f}s] Testing games with {board.moves}/{known_min_moves} moves.. (total: {len(boards)}, dups: {dups})"
             )
             min_moves = board.moves
 
@@ -107,16 +142,24 @@ def simulate(
                 console.print(
                     "[green bold]Found a solution less than previously known!"
                 )
+                add_solution(solution_trie, moves_made, 0, 1)
             elif board.moves == known_min_moves:
                 console.print("[yellow]Found matching previously known!")
+                add_solution(solution_trie, moves_made, 0, 1)
             else:
                 console.print("[red bold]Couldn't find the best solution!")
-            return moves_made
+                add_solution(solution_trie, moves_made, len(board.get_moves()), -2)
+            return moves_made, solution_trie
 
         # Get all moves in sorted order, by lower movements required
         moves = sorted(board.get_moves(), key=lambda m: (m[1], str(m[2])))
+
         if not moves:
+            add_solution(solution_trie, moves_made, 0, -1)
             continue
+
+        add_solution(solution_trie, moves_made, len(moves), 0)
+
         no_draw_moves = len([m for m in moves if m[1] == 0])
         if no_draw_moves > max_no_draw_moves:
             max_no_draw_moves = no_draw_moves
