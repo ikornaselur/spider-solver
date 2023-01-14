@@ -6,24 +6,23 @@ from heapq import heappush as push
 
 from rich.console import Console
 
-from spider_solver.flat_board import FlatBoard
-from spider_solver.card import Card
+from spider_solver.board import Board, card_from_raw, card_pos, pretty_card
 
 console = Console()
 
 
-def get_loc(board: FlatBoard, card: Card) -> str:
+def get_loc(board: Board, card: int) -> str:
     """Helper func to produce user friendly location info"""
-    if card.on_board:
-        num_counts = Counter(card.num for card in board.leaves)
-        if num_counts[card.num] == 1:
+    if card in board.cards:
+        num_counts = Counter(card_from_raw(card) for card in board.leaves)
+        if num_counts[card_from_raw(card)] == 1:
             return "[yellow]on the board[/yellow]"
-        return f"[yellow]{card.pos.lower()}[/yellow]"
+        return f"[yellow]{card_pos(board.cards, card)}[/yellow]"
     else:
         return "[red]on the stack[/red]"
 
 
-def describe_solution(board: FlatBoard, solution: list[int]) -> None:
+def describe_solution(board: Board, solution: list[int]) -> None:
     """Go through the solution and print out user friendly moves"""
     while solution:
         moves = sorted(board.get_moves(), key=lambda m: (m[1], str(m[2])))
@@ -35,7 +34,7 @@ def describe_solution(board: FlatBoard, solution: list[int]) -> None:
             )
         if len(cards) == 1:
             console.print(
-                f"[{board.moves + draws}] Remove [green]{cards[0].value}[/green] {get_loc(board, cards[0])}"
+                f"[{board.moves + draws}] Remove [green]{pretty_card(cards[0])}[/green] {get_loc(board, cards[0])}"
             )
         else:
             # Why [1] before [0]? When you match board card with stack card [0]
@@ -43,8 +42,8 @@ def describe_solution(board: FlatBoard, solution: list[int]) -> None:
             # first at the stack when matching these cards.. so just swap them
             # here rather than in logic I guess
             console.print(
-                f"[{board.moves + draws}] Match [green]{cards[1].value}[/green] {get_loc(board, cards[1])} and "
-                f"[green]{cards[0].value}[/green] {get_loc(board, cards[0])}"
+                f"[{board.moves + draws}] Match [green]{pretty_card(cards[1])}[/green] {get_loc(board, cards[1])} and "
+                f"[green]{pretty_card(cards[0])}[/green] {get_loc(board, cards[0])}"
             )
 
         board.play_move((move_type, draws, cards))
@@ -81,7 +80,7 @@ def add_solution(
 
 
 def simulate(
-    initial_board: FlatBoard,
+    initial_board: Board,
     *,
     known_min_moves: int,
     top_moves: int = 2,
@@ -176,19 +175,16 @@ def simulate(
             # for idx in range(min(len(moves), max_moves)):
             if move[1] > 0 and moves_played > max_moves:
                 break
-            # Hacky, whatever, will be slow!
-            # TODO: Can we break the whole state down to a simpler data structure?
-            board_copy = copy.deepcopy(board)
-            copied_moves = sorted(
-                board_copy.get_moves(), key=lambda m: (m[1], str(m[2]))
-            )
 
-            if copied_moves[idx][1] + board_copy.moves > known_min_moves:
+            if move[1] + board.moves > known_min_moves:
                 # Moves will definitely go over the limit, no use playing it
                 break
 
+            # Hacky, whatever, will be slow!
+            board_copy = copy.deepcopy(board)
+
             moves_played += 1
-            board_copy.play_move(copied_moves[idx])
+            board_copy.play_move(move)
             if (board_state := board_copy.state) in seen_states:
                 dups += 1
                 continue

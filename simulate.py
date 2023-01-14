@@ -5,8 +5,7 @@ from typing import TypedDict
 
 from rich.console import Console
 
-from spider_solver.flat_board import FlatBoard as Board
-# from spider_solver.board import Board
+from spider_solver.board import Board
 from spider_solver.game import describe_solution, simulate
 
 console = Console()
@@ -20,7 +19,7 @@ card_map = {
 }
 
 LEVELS_FILE = Path("levels.json")
-LEVEL = 1
+LEVEL = 20
 
 
 class GameInput(TypedDict):
