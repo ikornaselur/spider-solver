@@ -1,5 +1,6 @@
 from spider_solver.board import Board, Edges, MoveType
 from spider_solver.card import Card
+from spider_solver.flat_board import FlatBoard
 
 
 def test_board_init(unique_board: Board):
@@ -342,3 +343,173 @@ def test_get_moves_doesnt_provide_obvious_bad_moves_deadlock():
     bad_moves = [m for m in moves if m[1] == 0 and m[0] == MoveType.StackMatch]
 
     assert not bad_moves
+
+
+def test_flat_board_card_removal():
+    # fmt: off
+    board = FlatBoard(
+        rows=[
+                      [8],
+                     [7, 5],  # noqa     It's just easier to visualise
+                   [12, 1, 4],  # noqa   like this!
+                  [11, 7, 1, 6],  # noqa 
+                [12, 3, 1, 12, 7],  # noqa
+              [6, 2, 10, 5, 5, 9],  # noqa
+            [13, 2, 10, 4, 2, 11, 3],  # noqa
+        ],
+        stack=[6, 8, 11, 6, 8, 13, 13, 8, 10, 12, 3, 4,
+               2, 11, 1, 7, 10, 9, 9, 4, 3, 13, 9, 5],
+    )
+    # fmt: on
+
+    # Check that they flatten properly
+    assert board.cards[0].num == 8
+    assert board.cards[1].num == 7
+    assert board.cards[3].num == 12
+    assert board.cards[3].row == 2
+    assert board.cards[3].col == 0
+
+    assert len(board.cards) == 1 + 2 + 3 + 4 + 5 + 6 + 7
+
+    # Bottom corners
+    assert board.cards[21].num == 13
+    assert board.cards[21].row == 6
+    assert board.cards[21].col == 0
+
+    assert board.cards[27].num == 3
+    assert board.cards[27].row == 6
+    assert board.cards[27].col == 6
+
+    # Leaves
+    assert board.leaf_idxs == {21, 22, 23, 24, 25, 26, 27}
+    assert len(board.leaves) == 7
+    for i in [21, 22, 23, 24, 25, 26, 27]:
+        assert board.cards[i] in board.leaves
+
+    # Remove one of the leaves
+    board.remove_cards(board.cards[21])
+
+    # Check that leaves are now one less
+    assert len(board.leaves) == 6
+    assert board.leaf_idxs == {22, 23, 24, 25, 26, 27}
+
+    # Remove the next card at the bottom, which should keep leaves at 6,
+    # because the one in the row above gets added instead
+    board.remove_cards(board.cards[22])
+    assert len(board.leaves) == 6
+    assert board.leaf_idxs == {15, 23, 24, 25, 26, 27}
+    assert board.cards[15] in board.leaves
+
+
+def test_flat_board_card_removal_edges_issue():
+    # fmt: off
+    board = FlatBoard(
+        rows=[
+                      [8],
+                     [7, 5],  # noqa     It's just easier to visualise
+                   [12, 1, 4],  # noqa   like this!
+                  [11, 7, 1, 6],  # noqa 
+                [12, 3, 1, 12, 7],  # noqa
+              [6, 2, 10, 5, 5, 9],  # noqa
+            [13, 2, 10, 4, 2, 11, 3],  # noqa
+        ],
+        stack=[6, 8, 11, 6, 8, 13, 13, 8, 10, 12, 3, 4,
+               2, 11, 1, 7, 10, 9, 9, 4, 3, 13, 9, 5],
+    )
+    # fmt: on
+
+    board.remove_cards([board.cards[22], board.cards[26]])
+    assert board.leaf_idxs == {21, 23, 24, 25, 27}
+
+    board.remove_cards([board.cards[23], board.cards[27]])
+    assert board.leaf_idxs == {16, 20, 21, 24, 25}
+
+    board.remove_cards([board.cards[20], board.cards[24]])
+    assert board.leaf_idxs == {16, 17, 21, 25}
+
+
+def test_flat_board_moves():
+    # fmt: off
+    board = FlatBoard(
+        rows=[
+                      [8],
+                     [7, 5],  # noqa     It's just easier to visualise
+                   [12, 1, 4],  # noqa   like this!
+                  [11, 7, 1, 6],  # noqa 
+                [12, 3, 1, 12, 7],  # noqa
+              [6, 2, 10, 5, 5, 9],  # noqa
+            [13, 2, 10, 4, 2, 11, 3],  # noqa
+        ],
+        stack=[6, 8, 11, 6, 8, 13, 13, 8, 10, 12, 3, 4,
+               2, 11, 1, 7, 10, 9, 9, 4, 3, 13, 9, 5],
+    )
+    # fmt: on
+
+    # Should just be one obvious move, remove the king
+    moves = board.get_moves()
+    assert len(moves) == 1
+    move = moves.pop()
+    assert len(move[2]) == 1
+    card = move[2][0]
+    assert card == board.cards[21]
+    assert card in board.leaves
+
+    # Let's play that move!
+    board.play_move(move)
+
+    assert board.moves == 1
+    assert len(board.leaves) == 6
+    assert card not in board.leaves
+
+    # Let's get more moves
+    moves = board.get_moves()
+    assert len(moves) == 20
+
+
+def test_old_way_and_new_way():
+    # fmt: off
+    rows = [
+                  [8],
+                 [7, 5],  # noqa     It's just easier to visualise
+               [12, 1, 4],  # noqa   like this!
+              [11, 7, 1, 6],  # noqa 
+            [12, 3, 1, 12, 7],  # noqa
+          [6, 2, 10, 5, 13, 9],  # noqa
+        [5, 2, 10, 4, 2, 11, 3],  # noqa
+    ]
+    stack = [6, 8, 11, 6, 8, 13, 13, 8, 10, 12, 3, 4,
+             2, 11, 1, 7, 10, 9, 9, 4, 3, 13, 9, 5]
+    # fmt: on
+    old_board = Board(rows=rows, stack=stack, _optimise_blocked_by=False)
+    new_board = FlatBoard(rows=rows, stack=stack)
+
+    old_moves_made = []
+    new_moves_made = []
+
+    # Play the first move of both games and compare their options are the same
+    turn = 1
+    while True:
+        old_moves = sorted(old_board.get_moves(), key=lambda m: (m[1], str(m[2])))
+        new_moves = sorted(new_board.get_moves(), key=lambda m: (m[1], str(m[2])))
+
+        """
+        assert len(old_moves) == len(
+            new_moves
+        ), f"Turn {turn} has a mismatch number of moves"
+        """
+
+        # Ensure the order matches?
+        assert [str(m[2]) for m in old_moves] == [str(m[2]) for m in new_moves], f"Turn {turn} has different card options"
+
+        if len(old_moves) == 0 and len(new_moves) == 0:
+            # Whoa, done?
+            break
+
+        # Play the first move
+        old_board.play_move(old_moves[0])
+        old_moves_made.append(old_moves[0])
+
+        new_board.play_move(new_moves[0])
+        new_moves_made.append(new_moves[0])
+
+        turn += 1

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from typing_extensions import Self
+from typing import Self
 
 from spider_solver.card import Card
 from spider_solver.exceptions import IllegalMove

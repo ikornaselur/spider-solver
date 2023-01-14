@@ -5,7 +5,8 @@ from typing import TypedDict
 
 from rich.console import Console
 
-from spider_solver.board import Board
+from spider_solver.flat_board import FlatBoard as Board
+# from spider_solver.board import Board
 from spider_solver.game import describe_solution, simulate
 
 console = Console()
@@ -74,7 +75,7 @@ def main():
     # Then fallback to 2
     top_moves = 2
 
-    (solution, solution_trie) = simulate(
+    (solution, _) = simulate(
         initial_board,
         known_min_moves=game["known_min_moves"],
         top_moves=top_moves,
@@ -91,4 +92,5 @@ def main():
     describe_solution(initial_board, solution)
 
 
-main()
+if __name__ == "__main__":
+    main()

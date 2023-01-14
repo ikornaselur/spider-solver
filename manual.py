@@ -1,7 +1,8 @@
 from rich.console import Console
 from rich.prompt import Prompt
 
-from spider_solver.board import Board, Move
+from spider_solver.board import Move
+from spider_solver.flat_board import FlatBoard as Board
 from spider_solver.game import get_loc
 
 console = Console()
@@ -13,7 +14,6 @@ card_map = {
     "d": 12,
     "k": 13,
 }
-
 
 example_game_raw = (
     "5 30 j2d k689 d8357 564390 6daakk7",
@@ -88,4 +88,5 @@ def main():
         console.print("[red]Uhm.. error?")
 
 
-main()
+if __name__ == "__main__":
+    main()

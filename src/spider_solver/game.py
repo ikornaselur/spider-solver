@@ -6,12 +6,13 @@ from heapq import heappush as push
 
 from rich.console import Console
 
-from spider_solver.board import Board, Card
+from spider_solver.flat_board import FlatBoard
+from spider_solver.card import Card
 
 console = Console()
 
 
-def get_loc(board: Board, card: Card) -> str:
+def get_loc(board: FlatBoard, card: Card) -> str:
     """Helper func to produce user friendly location info"""
     if card.on_board:
         num_counts = Counter(card.num for card in board.leaves)
@@ -22,7 +23,7 @@ def get_loc(board: Board, card: Card) -> str:
         return "[red]on the stack[/red]"
 
 
-def describe_solution(board: Board, solution: list[int]) -> None:
+def describe_solution(board: FlatBoard, solution: list[int]) -> None:
     """Go through the solution and print out user friendly moves"""
     while solution:
         moves = sorted(board.get_moves(), key=lambda m: (m[1], str(m[2])))
@@ -80,7 +81,7 @@ def add_solution(
 
 
 def simulate(
-    initial_board: Board,
+    initial_board: FlatBoard,
     *,
     known_min_moves: int,
     top_moves: int = 2,
@@ -136,7 +137,7 @@ def simulate(
             )
             min_moves = board.moves
 
-        if not board.cards:
+        if board.completed or not board.cards:
             console.print(f"[green]Solution found with {board.moves} moves")
             if board.moves < known_min_moves:
                 console.print(

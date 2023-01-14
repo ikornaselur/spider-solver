@@ -41,9 +41,14 @@ class Board:
     root_card: Card
     moves: int
     blocked_by: defaultdict[Card, set[Card]]
+    _optimise_blocked_by: bool
 
     def __init__(
-        self, rows: list[list[int]], stack: list[int], _validate: bool = True
+        self,
+        rows: list[list[int]],
+        stack: list[int],
+        _validate: bool = True,
+        _optimise_blocked_by: bool = True,
     ) -> None:
         if _validate:
             # For testing..
@@ -90,6 +95,7 @@ class Board:
                         card, self.cards[right_parent].right
                     )
 
+        self._optimise_blocked_by = _optimise_blocked_by
         if hasattr(self, "root_card"):
             # Special test case.. it's just easy like this
             self._walk(self.root_card)
@@ -107,6 +113,8 @@ class Board:
           7 10 11
         Then the 3 is blocked by 10, but the 2 is not blocked by 11
         """
+        if not self._optimise_blocked_by:
+            return
         if seen is None:
             seen = set()
 
@@ -242,6 +250,8 @@ class Board:
 
         Known bad moves include causing the game to end up with a pair that blocks each other.
         """
+        if not self._optimise_blocked_by:
+            return False
         if move_type != MoveType.StackMatch:
             raise NotImplementedError()
 

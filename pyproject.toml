@@ -6,7 +6,7 @@ authors = ["Axel <spider@absalon.dev>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.11"
 rich = "^13.0.0"
 
 [tool.poetry.group.lint.dependencies]
