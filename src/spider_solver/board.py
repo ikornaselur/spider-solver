@@ -1,528 +1,505 @@
-"""A game board
-
-A game board is a Spider Solitare board that has 7 rows, with the top row
-having one card and bottom row having 7 cards.
-
-A card is going to be blocked by the two cards below it, in a pyramid fashion,
-creating sort of a one directional graph where only the leaves (that don't
-point to any other cards) can be removed.
-
-While this is techincally a graph, each node will only have 0, 1 or 2 one way
-edges to other nodes. A node may have 0, 1 or 2 one direction edges from other
-nodes pointing at it.
-"""
 from __future__ import annotations
 
-from collections import Counter
 from collections.abc import Sequence
-from enum import Enum
-from typing import NamedTuple, Optional, TypeAlias, Union
-from typing_extensions import Self
+
+from spider_solver.exceptions import IllegalMove
+from spider_solver.types import Move, MoveType
+
+blockers_map = {
+    0: set(),
+    1: {0},
+    2: {0},
+    3: {1, 0},
+    4: {1, 2, 0},
+    5: {2, 0},
+    6: {3, 1, 0},
+    7: {3, 4, 1, 2, 0},
+    8: {4, 5, 1, 2, 0},
+    9: {5, 2, 0},
+    10: {6, 3, 1, 0},
+    11: {6, 7, 3, 4, 1, 2, 0},
+    12: {7, 8, 3, 4, 5, 1, 2, 0},
+    13: {8, 9, 4, 5, 1, 2, 0},
+    14: {9, 5, 2, 0},
+    15: {10, 6, 3, 1, 0},
+    16: {10, 11, 6, 7, 3, 4, 1, 2, 0},
+    17: {11, 12, 6, 7, 8, 3, 4, 5, 1, 2, 0},
+    18: {12, 13, 7, 8, 9, 3, 4, 5, 1, 2, 0},
+    19: {13, 14, 8, 9, 4, 5, 1, 2, 0},
+    20: {14, 9, 5, 2, 0},
+    21: {15, 10, 6, 3, 1, 0},
+    22: {15, 16, 10, 11, 6, 7, 3, 4, 1, 2, 0},
+    23: {16, 17, 10, 11, 12, 6, 7, 8, 3, 4, 5, 1, 2, 0},
+    24: {17, 18, 11, 12, 13, 6, 7, 8, 9, 3, 4, 5, 1, 2, 0},
+    25: {18, 19, 12, 13, 14, 7, 8, 9, 3, 4, 5, 1, 2, 0},
+    26: {19, 20, 13, 14, 8, 9, 4, 5, 1, 2, 0},
+    27: {20, 14, 9, 5, 2, 0},
+}
+
+blocks_cards_map = {
+    0: (None, None),
+    1: (0, None),
+    2: (0, None),
+    3: (1, None),
+    4: (1, 2),
+    5: (2, None),
+    6: (3, None),
+    7: (3, 4),
+    8: (4, 5),
+    9: (5, None),
+    10: (6, None),
+    11: (6, 7),
+    12: (7, 8),
+    13: (8, 9),
+    14: (9, None),
+    15: (10, None),
+    16: (10, 11),
+    17: (11, 12),
+    18: (12, 13),
+    19: (13, 14),
+    20: (14, None),
+    21: (15, None),
+    22: (15, 16),
+    23: (16, 17),
+    24: (17, 18),
+    25: (18, 19),
+    26: (19, 20),
+    27: (20, None),
+}
+
+# What cards are blocking X
+blocked_by_map = {
+    0: {
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+    },
+    1: {3, 4, 6, 7, 8, 10, 11, 12, 13, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25, 26},
+    2: {4, 5, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19, 20, 22, 23, 24, 25, 26, 27},
+    3: {6, 7, 10, 11, 12, 15, 16, 17, 18, 21, 22, 23, 24, 25},
+    4: {7, 8, 11, 12, 13, 16, 17, 18, 19, 22, 23, 24, 25, 26},
+    5: {8, 9, 12, 13, 14, 17, 18, 19, 20, 23, 24, 25, 26, 27},
+    6: {10, 11, 15, 16, 17, 21, 22, 23, 24},
+    7: {11, 12, 16, 17, 18, 22, 23, 24, 25},
+    8: {12, 13, 17, 18, 19, 23, 24, 25, 26},
+    9: {13, 14, 18, 19, 20, 24, 25, 26, 27},
+    10: {15, 16, 21, 22, 23},
+    11: {16, 17, 22, 23, 24},
+    12: {17, 18, 23, 24, 25},
+    13: {18, 19, 24, 25, 26},
+    14: {19, 20, 25, 26, 27},
+    15: {21, 22},
+    16: {22, 23},
+    17: {23, 24},
+    18: {24, 25},
+    19: {25, 26},
+    20: {26, 27},
+    21: set(),
+    22: set(),
+    23: set(),
+    24: set(),
+    25: set(),
+    26: set(),
+    27: set(),
+}
+
+"""
+This is really helpful, trust me:
+      0
+     1 2
+    3 4 5
+   6 7 8 9
+  0 1 2 3 4
+ 5 6 7 8 9 0
+1 2 3 4 5 6 7
+"""
+
+# Num + row + col
+# Card = tuple[int, int, int]
 
 
-class SpiderException(Exception):
-    pass
+def card_from_raw(val: int) -> int:
+    """A raw value will be from 0 to 51
 
+    Aces will be 0, 13, 26 and 39 for example
 
-class IllegalMove(SpiderException):
-    pass
-
-
-class CardNotFound(SpiderException):
-    pass
-
-
-class Card:
-    num: int  # The value of the card from 1 to 13
-
-    # Position metadata to identify duplicates. If not set, it could be in a
-    # stack instead of the main board
-    row: Optional[int]
-    col: Optional[int]
-
-    def __init__(
-        self, num: int, row: Optional[int] = None, col: Optional[int] = None
-    ) -> None:
-        self.num = num
-        self.row = row
-        self.col = col
-
-    @property
-    def value(self) -> str:
-        match self.num:
-            case 1:
-                return "A"
-            case 10:
-                return "0"  # Single width values for all cards
-            case 11:
-                return "J"
-            case 12:
-                return "D"
-            case 13:
-                return "K"
-            case _:
-                return str(self.num)
-
-    @property
-    def match(self) -> int:
-        """The value that needs to match with this card
-
-        The king will return the value 0, which means it can match by itself
-        """
-        return (13 - self.num) or 13
-
-    @property
-    def on_board(self) -> bool:
-        """Whether the card is on the playing board or not
-
-        If False, the card is in the stack
-        """
-        return self.row is not None and self.col is not None
-
-    @property
-    def pos(self) -> str:
-        if self.row is None or self.col is None:
-            return "In stack"
-
-        match self.row:
-            case 0:
-                row = "1st"
-            case 1:
-                row = "2nd"
-            case 2:
-                row = "3rd"
-            case _:
-                row = f"{self.row + 1}th"
-        match self.col:
-            case 0:
-                col = "1st"
-            case 1:
-                col = "2nd"
-            case 2:
-                col = "3rd"
-            case _:
-                col = f"{self.col + 1}th"
-
-        return f"On board {row} row, {col} card"
-
-    def __repr__(self) -> str:
-        return f"<Card {self.value}: {self.pos}>"
-
-
-class MoveType(Enum):
-    BoardMatch = "BoardMatch"
-    BoardStackMatch = "BoardStackMatch"
-    StackMatch = "StackMatch"
-
-
-# The number of draws required from the stack
-Draws: TypeAlias = int
-Move: TypeAlias = tuple[MoveType, Draws, tuple[Card, ...]]
-
-
-class Stack:
-    """A stack of cards that can be drawn from
-
-    An index to the current card on the top of the stack is kept, rather than
-    changing the order itself
+    Turns 0, 13, 26 and 39 to be "1" for Ace
     """
-
-    cards: list[Optional[Card]]
-    idx: int
-
-    def __init__(self, cards: list[Optional[Card]]) -> None:
-        self.cards = cards
-        self.cards.append(None)  # We cna draw past the last card
-        self.idx = 0
-
-    @classmethod
-    def from_ints(cls, cards: list[int]) -> Self:
-        return cls([Card(num) for num in cards])
-
-    def draw(self, count: int = 1) -> Optional[Card]:
-        """Draw the next card and return what card is now at the top"""
-        self.idx = (self.idx + count) % len(self.cards)
-
-        return self.peek
-
-    @property
-    def peek(self) -> Optional[Card]:
-        """Peek at the top card without drawing a new one
-
-        None if the stack is empty
-        """
-        if not self.cards:
-            return None
-        return self.cards[self.idx]
-
-    @property
-    def prev(self) -> Optional[Card]:
-        """The previous card, if the top one is now being shown
-
-        Two cards are shown at the same time in the Solitare, allowing the user
-        to match two cards in a row from the stack.
-        """
-        if self.idx == 0:
-            return None
-
-        return self.cards[self.idx - 1]
-
-    def get_card_at_draws(self, draws: int) -> Optional[Card]:
-        """Return the card that would be at the top after this many draws"""
-        return self.cards[(self.idx + draws) % len(self.cards)]
-
-    def num_in_stack(self, num: int) -> list[int]:
-        """Return how many draws would be required to get to the number in the stack
-
-        If the card is visible as the previous card, it will be indicated as
-        -1, to differentiate between the left and right visible cards
-        # XXX: Is this a good idea?
-        # INFO: It did work out in hte end, so I think it was a good idea?
-        """
-        if self.idx == 0:
-            # Whole stack is just in order, only one visible card
-            curr_order = self.cards[:]
-        else:
-            # We skip the card before current idx, as it is visible
-            curr_order = self.cards[self.idx :] + self.cards[: self.idx - 1]
-
-        draws_for_num = []
-        if self.prev is not None and self.prev.num == num:
-            draws_for_num.append(-1)
-        for idx, card in enumerate(curr_order):
-            if card is not None and card.num == num:
-                draws_for_num.append(idx)
-
-        return draws_for_num
-
-    def get_stack_moves(self) -> set[Move]:
-        moves = set()
-        # Check for any pairs in the stack
-        for idx, (left, right) in enumerate(zip(self.cards, self.cards[1:])):
-            if right is not None and right.num == 13:
-                moves.add(
-                    (
-                        MoveType.StackMatch,
-                        (idx + 1 - self.idx) % len(self.cards),
-                        (right,),
-                    )
-                )
-            elif left is not None and right is not None and left.match == right.num:
-                moves.add(
-                    (
-                        MoveType.StackMatch,
-                        (idx + 1 - self.idx) % len(self.cards),
-                        (left, right),
-                    )
-                )
-        return moves
-
-    def remove_cards(self, cards: Union[Card, Sequence[Card]]) -> None:
-        """Remove a visible card from the stack"""
-        if cards is None:
-            raise IllegalMove("Can not remove the empty None slot at the back")
-        if isinstance(cards, Card):
-            cards = [cards]
-
-        for card in cards:
-            if self.prev is not card and self.peek is not card:
-                raise IllegalMove(
-                    "Unable to remove card, it's not visible from the stack"
-                )
-
-        for card in cards:
-            if self.prev is card:
-                # Shift the index back as we are removing a card prior to the current idx
-                self.idx -= 1
-            # if self.peek is card and self.idx:
-            # We are removing the current card,
-
-            self.cards.remove(card)
-
-    def __repr__(self) -> str:
-        cards = [
-            str(card.num) if card else "X"
-            for card in self.cards[self.idx :] + self.cards[: self.idx]
-        ]
-        return f"<Stack {' '.join(cards)}>"
+    return (val % 13) + 1
 
 
-class Edges(NamedTuple):
-    left: Optional[Card]
-    right: Optional[Card]
+def card_pos(cards: list[int], card: int) -> str:
+    idx = cards.index(card)
+    # I'm so damn lazy
+    if idx == 0:
+        return "On board 1st row, 1st card"
+    if idx in [1, 2]:
+        return f"On board 2nd row, card {idx}"
+    if idx in [3, 4, 5]:
+        return f"On board 3rd row, card {idx - 2}"
+    if idx in [6, 7, 8, 9]:
+        return f"On board 4th row, card {idx - 5}"
+    if idx in [10, 11, 12, 13, 14]:
+        return f"On board 5th row, card {idx - 9}"
+    if idx in [15, 16, 17, 18, 19, 20]:
+        return f"On board 6th row, card {idx - 14}"
+    if idx in [21, 22, 23, 24, 25, 26, 27]:
+        return f"On board 7th row, card {idx - 20}"
+    return "No idea"
 
-    @property
-    def edge_state(self) -> str:
-        return f"{self.left.value if self.left else '_'}:{self.right.value if self.right else '_'}"
 
-    def __len__(self) -> int:
-        return 1 if self.left else 0 + 1 if self.right else 0
+def pretty_card(val: int) -> str:
+    match card_from_raw(val):
+        case 1:
+            return "A"
+        case 10:
+            return "0"  # Single width values for all cards
+        case 11:
+            return "J"
+        case 12:
+            return "D"
+        case 13:
+            return "K"
+        case other:
+            return str(other)
+
+
+def match(val: int) -> int:
+    """Get the card value that would match with this card
+
+    1 will return 12 (Ace matchs with Jack)
+    13 will return 13 (King matches with itself)
+    """
+    return (13 - val) or 13
+
+
+def cards_match(a: int, b: int) -> bool:
+    """Check if two cards are a matchin pair"""
+    a = card_from_raw(a)
+    b = card_from_raw(b)
+    return match(a) == b
 
 
 class Board:
-    stack: Stack
-    cards: dict[Card, Edges]
-    root_card: Card
+    stack: list[int]
+    stack_idx: int
+    cards: list[int]
     moves: int
+    leaf_idxs: set[int]
+    completed: bool
+    _card_counts: dict[int, int]
 
-    def __init__(
-        self, rows: list[list[int]], stack: list[int], _validate: bool = True
-    ) -> None:
-        if _validate:
-            # For testing..
-            if len(rows) != 7:
-                raise ValueError("Exactly 7 rows of cards are required")
-            if any(len(row) != idx + 1 for idx, row in enumerate(rows)):
-                raise ValueError(
-                    "Number of cards per row needs to match the 1-indexed row number"
-                )
-            if sum(len(row) for row in rows) + len(stack) != 52:
-                raise ValueError("Expected 52 cards")
-            # Check counts of all 13 sorts is 4
-            card_vals = Counter([num for row in rows for num in row] + stack)
-            if len(card_vals) != 13:
-                raise ValueError("Expected 13 sorts")
-            mis_match_counts = [key for key,val in card_vals.items() if val != 4]
-            if any(mis_match_counts):
-                raise ValueError(f"Not all sorts are 4 counts: {mis_match_counts}")
+    def __init__(self, rows: list[list[int]], stack: list[int]) -> None:
+        self.cards = []
+        self._card_counts = {key: 0 for key in range(1, 14)}
+        self._stack_counts = {key: 0 for key in range(1, 14)}
 
+        # Set the board cards
+        for card in [num for row in rows for num in row]:
+            # Store the cards offset based on the counts
+            # First A will be 0, next A will be 13, then 26 and 39
+            count = self._card_counts[card]
+            self.cards.append((card - 1) + 13 * count)
+            self._card_counts[card] += 1
+
+        # Set the board cards
+        self.stack = []
+        self.stack_idx = 0
+        for card in stack:
+            count = self._card_counts[card]
+            self.stack.append((card - 1) + 13 * count)
+            self._card_counts[card] += 1
+            self._stack_counts[card] += 1
+
+        self.leaf_idxs = set(range(21, 28))
         self.moves = 0
-        self.cards = {}
-
-        # Keep track of references to the cards from the row/column tuple to create the edges
-        row_to_card_map: dict[tuple[int, int], Card] = {}
-
-        for row_idx, row in enumerate(rows):
-            for num_idx, num in enumerate(row):
-                card = Card(num, row=row_idx, col=num_idx)
-                self.cards[card] = Edges(None, None)
-                row_to_card_map[(row_idx, num_idx)] = card
-
-                if row_idx == 0:
-                    # No cards above the first row
-                    self.root_card = card
-                if num_idx != 0:
-                    # All numbers, except the first, will have a parent on the left
-                    left_parent = row_to_card_map[(row_idx - 1, num_idx - 1)]
-                    self.cards[left_parent] = Edges(self.cards[left_parent].left, card)
-                if num_idx != len(row) - 1:
-                    # All numbers, except last, will have a parent on the right
-                    right_parent = row_to_card_map[(row_idx - 1, num_idx)]
-                    self.cards[right_parent] = Edges(
-                        card, self.cards[right_parent].right
-                    )
-
-        self.stack = Stack.from_ints(stack)
+        self.completed = False
 
     @property
-    def leaves(self) -> set[Card]:
-        return set(card for card, edges in self.cards.items() if len(edges) == 0)
+    def leaves(self) -> set[int]:
+        return set(self.cards[idx] for idx in self.leaf_idxs)
 
-    def get_moves(self) -> set[Move]:
-        """Calculate all moves that are possible in the current state
+    def remove_cards(self, cards_to_remove: Sequence[int]) -> None:
+        # Find the index of the cards to remove
+        card_idxs = [self.cards.index(card) for card in cards_to_remove]
 
-        The moves could be to match either two cards from the board itself, or,
-        to match a card from the board with one from the stack.
+        # One by one, remove those indexes and check if we introduce a new leaf
+        leaf_candidates = set()
+        for card_idx in card_idxs:
+            self.leaf_idxs.remove(card_idx)
+            if card_idx == 0:
+                self.completed = True
 
-        There could also be moves to match two cards in a row within the stack.
+            # Get what it blocks and check if those are still blocked by
+            # something else
+            for blocked_card in blocks_cards_map[card_idx]:
+                if blocked_card is not None:
+                    leaf_candidates.add(blocked_card)
 
-        The possible moves that require the stack indicate how many draws of
-        the stack are required.
+        # Remove candidates that are blocked by other candidates, as if those
+        # blockers are going in they are going to block the previous card (this
+        # hardly makes any sense, but it should be obvious.. right?)
+        candidate_blockers = set()
+        for candidate in leaf_candidates:
+            candidate_blockers.update(blockers_map[candidate])
 
-        If there are no moves possible, then the list of moves will be empty
+        # And now check the ones that aren't blocked by other candidates
+        for candidate in leaf_candidates - candidate_blockers:
+            if not blocked_by_map[candidate] & self.leaf_idxs:
+                # This card has just become a leaf!
+                self.leaf_idxs.add(candidate)
 
-        A move is a 3-tuple of (Move type, number of draws required from the
-        stack, tuple of the cards to match)
-        The tuple of cards can be a one tuple, only if it's a king.
+        # Also reduce the counts..
+        for card in cards_to_remove:
+            self._card_counts[card_from_raw(card)] -= 1
 
-        Some feeble optimisations:
-            * If there is a removable king without drawing, it's the only move
-            * If we have to draw to continue and there is a king on top of the
-              stack, removing it is the only move
-            * If any match can be done where it's the last two cards of their
-              sort, then that's the only move
-                - If they're on the table, just get it out of the way
-                - If they're in the stack, only give them as the only option if
-                  the only alternatives are to draw anyway
-                - If removing cards locks other cards in the graph, it's not a
-                  valid move! # TODO This
-        """
+    def remove_stack_cards(self, cards_to_remove: Sequence[int]) -> None:
+        # I should error check here, but again, not wasting any cycles on it! NEW WAY IS FAST AND DANGEROUS
+        # Later addition to this comment: There was was an issue here in the end..
+        for card in cards_to_remove:
+            if self.stack_idx > 0 and self.stack[self.stack_idx - 1] == card:
+                # Need to shift back since the right card will have moved up
+                self.stack_idx -= 1
+            self.stack.remove(card)
+
+    def _get_stack_draws(self, val: int) -> list[int]:
+        """Return a list of how many draws are needed to find the card by value"""
+        draws: list[int] = []
+
+        stack_len = len(self.stack)
+
+        if self.stack_idx > 0:
+            # We have to account for a left card being visible
+            if card_from_raw(self.stack[self.stack_idx - 1]) == val:
+                draws.append(-1)  # "Draw -1" means it's the previous visible card
+        for idx, card in enumerate(self.stack[self.stack_idx :]):
+            if card_from_raw(card) == val:
+                draws.append(idx)
+        for idx, card in enumerate(self.stack[: max(self.stack_idx - 1, 0)]):
+            if card_from_raw(card) == val:
+                draws.append(idx + stack_len - self.stack_idx + 1)
+
+        return draws
+
+    def _get_stack_moves(self) -> set[Move]:
         moves = set()
 
-        # Get cards that only have 1 count left
-        card_counts = Counter(
-            [card.num for card in self.cards.keys()]
-            + [card.num for card in self.stack.cards if card]
-        )
-        solo_cards = {key for key, val in card_counts.items() if val == 1}
+        if self.stack_idx > 0:
+            # Check if the two visible cards match
+            left = self.stack[self.stack_idx - 1]
+            if self.stack_idx < len(self.stack):
+                if cards_match(left, (right := self.stack[self.stack_idx])):
+                    moves.add(
+                        (
+                            MoveType.StackMatch,
+                            0,
+                            (left, right),
+                        )
+                    )
+            # Also check if there is a king visible on the left side
+            if card_from_raw(left) == 13:
+                moves.add((MoveType.StackMatch, -1, (left,)))
+
+        # Lets check the right side solo as well for king
+        if self.stack_idx < len(self.stack):
+            if card_from_raw((right := self.stack[self.stack_idx])) == 13:
+                moves.add((MoveType.StackMatch, 0, (right,)))
+
+        # Check if any pairs match going further up the stack
+        upper_stack = self.stack[self.stack_idx :]
+        for draw, (left, right) in enumerate(zip(upper_stack, upper_stack[1:])):
+            if card_from_raw(right) == 13:
+                # Get rid of that king!
+                moves.add((MoveType.StackMatch, draw + 1, (right,)))
+            elif cards_match(left, right):
+                moves.add((MoveType.StackMatch, draw + 1, (left, right)))
+
+        # Check if any pairs after resetting the stack
+        lower_stack = self.stack[: self.stack_idx]
+        stack_len = len(self.stack)
+        for draw, (left, right) in enumerate(zip(lower_stack, lower_stack[1:])):
+            if cards_match(left, right):
+                moves.add(
+                    (
+                        MoveType.StackMatch,
+                        draw + stack_len - self.stack_idx + 1,
+                        (left, right),
+                    )
+                )
+
+        return moves
+
+    def get_moves(self) -> set[Move]:
+        # Check first for kings in the leaves
+        for card in self.leaves:
+            if card_from_raw(card) == 13:
+                return {(MoveType.BoardMatch, 0, (card,))}
+
+        # Otherwise let's build up some moves..
+        moves = set()
+        solo_cards = {key for key, val in self._card_counts.items() if val == 1}
 
         # Check for any matches on the table itself
         moves_on_table = False
-        leaves = self.leaves
-        for leaf in leaves:
-            for match in (
-                pot_match for pot_match in leaves if pot_match.match == leaf.num
+        already_matched = set()
+        for leaf in self.leaves:
+            for leaf_match in (
+                pot_match for pot_match in self.leaves if cards_match(leaf, pot_match)
             ):
-                if leaf.num > match.num:
-                    leaf, match = match, leaf
-                if leaf is match:
-                    # It's a king, we just return that as the only move!
-                    return {(MoveType.BoardMatch, 0, (leaf,))}
-                elif leaf.num in solo_cards:
-                    # This is a part of a last pair, it's the only logical move
-                    return {(MoveType.BoardMatch, 0, (leaf, match))}
+                if leaf_match in already_matched:
+                    continue
+                already_matched.update({leaf, leaf_match})
+                if card_from_raw(leaf) in solo_cards:
+                    # Last pair match, only logical move
+                    return {(MoveType.BoardMatch, 0, (leaf, leaf_match))}
                 else:
-                    moves.add((MoveType.BoardMatch, 0, (leaf, match)))
+                    moves.add((MoveType.BoardMatch, 0, (leaf, leaf_match)))
                     moves_on_table = True
 
-        # Check for any moves that require the stack
-        for leaf in leaves:
-            if not (idxs := self.stack.num_in_stack(leaf.match)):
+        # Check for stack matches
+        for leaf in self.leaves:
+            leaf_val = card_from_raw(leaf)
+            leaf_match = match(leaf_val)
+            if not self._stack_counts[leaf_match]:
+                # Match not in the stack
                 continue
-            for idx in idxs:
-                if leaf.num in solo_cards and idx <= 0:
+
+            # We have some potential matches to make in from the stack.. let's find them
+            draws = self._get_stack_draws(leaf_match)
+            for draw in draws:
+                stack_card_idx = self.stack_idx + draw
+                if stack_card_idx > (stack_len := len(self.stack)):
+                    # Need to wrap the stack!
+                    stack_card_idx -= stack_len + 1  # One for flippage
+                stack_card = self.stack[stack_card_idx]
+                if leaf_val in solo_cards and draw <= 0:
                     # We should get rid of it ASAP
-                    stack_card = self.stack.get_card_at_draws(idx)
-                    if stack_card is None:
-                        raise SpiderException(
-                            "Incorrectly matched the empty spot in the stack"
-                        )
-                    return {(MoveType.BoardStackMatch, max(idx, 0), (leaf, stack_card))}
+                    return {
+                        (MoveType.BoardStackMatch, max(draw, 0), (leaf, stack_card))
+                    }
                 # Left side of visible stack card is -1, no need to draw, hence max()
                 moves.add(
                     (
                         MoveType.BoardStackMatch,
-                        max(idx, 0),
-                        (leaf, self.stack.get_card_at_draws(idx)),
+                        max(draw, 0),
+                        (leaf, stack_card),
                     )
                 )
 
         # Check for any moves that match in the stack
-        stack_moves = self.stack.get_stack_moves()
-        for move_type, draws, cards in stack_moves:
-            if (
-                draws == 0
-                and (cards[0].num in solo_cards or cards[0].num == 13)
-                and not moves_on_table
-            ):
-                # This stack move is a solo move, but we should only return it
-                # IF there are no 0 draw moves already available
-                return {(move_type, draws, cards)}
+        stack_moves = self._get_stack_moves()
+        if not moves_on_table:
+            for move_type, draws, cards in stack_moves:
+                if draws != 0:
+                    continue
+                if (
+                    card_val := card_from_raw(cards[0])
+                ) == 13 or card_val in solo_cards:
+                    # This stack move is a solo move, but we should only return it
+                    # IF there are no 0 draw moves already available
+                    return {(move_type, draws, cards)}
+
         moves.update(stack_moves)
 
         return moves
 
-    def play_move(self, move: Move) -> int:
-        """Play a move and return the current number of moves the board is at"""
+    def _stack_draw(self, draws: int) -> None:
+        if draws <= 0:
+            return
+        self.stack_idx += draws
+        if self.stack_idx == len(self.stack):
+            raise NotImplementedError(
+                "Do I need to handle the case of last card but no flip?"
+            )
+
+        if self.stack_idx > len(self.stack):
+            self.stack_idx -= len(self.stack) + 1  # Extra one for the stack reset
+
+        self.moves += draws
+
+    def play_move(self, move: Move) -> None:
         move_type, draws, cards = move
+        self._stack_draw(draws)
 
-        if draws:
-            self.stack.draw(draws)
-            self.moves += draws
-
-        # TODO: No need to use types, given that we can just check if cards are on board or stack
-        # NOTE: That might be slower though?
         match (move_type, cards):
             case (MoveType.BoardMatch, cards):
-                self._remove_cards(cards)
+                self.remove_cards(cards)
             case (MoveType.BoardStackMatch, (board_card, stack_card)):
-                if not board_card.on_board ^ stack_card.on_board:
-                    raise SpiderException(
-                        "Expected one card to be on board and other on stack"
-                    )
+                # Will raise ValueError if flipped.. Not wasting cycles on
+                # error checking, they shouldn't be mixed up in the first
+                # place!
 
-                if not board_card.on_board:
-                    # Flip them around to be correct
-                    board_card, stack_card = stack_card, board_card
-
-                if (
-                    stack_card is not self.stack.peek
-                    and stack_card is not self.stack.prev
-                ):
-                    raise IllegalMove("Unable to match a stack card that isn't visible")
-
-                # Remove the stack card from the stack
-                self.stack.remove_cards(stack_card)
-
-                # Remove the board card from the board
-                self._remove_cards(board_card)
+                self.remove_stack_cards([stack_card])
+                self._card_counts[card_from_raw(stack_card)] -= 1
+                self.remove_cards([board_card])
             case (MoveType.StackMatch, cards):
-                self.stack.remove_cards(cards)
+                self.remove_stack_cards(cards)
+                self._card_counts[card_from_raw(cards[0])] -= 1
+                if len(cards) == 2:
+                    self._card_counts[card_from_raw(cards[1])] -= 1
             case _:
                 raise IllegalMove("Unmatched move")
 
         self.moves += 1
 
-        return self.moves
-
-    def _remove_cards(self, cards_to_remove: Union[Card, Sequence[Card]]) -> None:
-        if isinstance(cards_to_remove, Card):
-            cards_to_remove = [cards_to_remove]
-
-        # Validate
-        for card in cards_to_remove:
-            # Find the cards and ensure they can be moved
-            if card not in self.cards:
-                raise CardNotFound()
-            if self.cards[card]:
-                raise IllegalMove("Card is blocked by other cards")
-
-        # Remove blocks from cards above
-        for card_to_remove in cards_to_remove:
-            for card in self.cards:
-                if card_to_remove in (parent := self.cards[card]):
-                    if parent.left is card_to_remove:
-                        self.cards[card] = Edges(None, parent.right)
-                    elif parent.right is card_to_remove:
-                        self.cards[card] = Edges(parent.left, None)
-
-            # Remove the cards
-            del self.cards[card_to_remove]
-
     @property
     def state(self) -> str:
         moves = str(self.moves)
-        card_state = "".join(
-            [f"{card.value}:{val.edge_state}" for card, val in self.cards.items()]
-        )
-        stack_state = "".join([card.value for card in self.stack.cards if card])
-        stack_idx = str(self.stack.idx)
+        card_state = ":".join(sorted(str(idx) for idx in self.leaf_idxs))
+        stack_state = ":".join(str(card) for card in self.stack)
+        stack_idx = str(self.stack_idx)
         return "|".join([moves, card_state, stack_idx, stack_state])
 
     def __repr__(self) -> str:
-        if not self.cards:
-            return "Finished!"
-        cards = [self.root_card]
+        removed_cards = set()
+        for leaf_idx in self.leaf_idxs:
+            removed_cards.update(blocked_by_map[leaf_idx])
 
-        indent = 7
-        lines = []
-        while any(card is not None for card in cards):
-            next_cards = []
-            row = " " * indent
-            indent -= 1
-            for card in cards:
-                if card:
-                    row += f"{card.value} "
-                    next_cards.append(self.cards[card].left)
+        rows = [
+            [0],
+            [1, 2],
+            [3, 4, 5],
+            [6, 7, 8, 9],
+            [10, 11, 12, 13, 14],
+            [15, 16, 17, 18, 19, 20],
+            [21, 22, 23, 24, 25, 26, 27],
+        ]
+
+        out = ""
+        for row in rows:
+            for card_idx in row:
+                if card_idx in removed_cards:
+                    card = "_"
                 else:
-                    row += "  "
-                    next_cards.append(None)
-            # Add the far right based on last card
-            if cards[-1]:
-                next_cards.append(self.cards[cards[-1]].right)
+                    card = card_from_raw(self.cards[card_idx])
+                out += f"{card} "
+            out += "\n"
 
-            lines.append(row.rstrip())
-            cards = next_cards
-
-        # Show the stack in the top line, right corner
-        left_card = self.stack.prev
-        right_card = self.stack.peek
-
-        lines[
-            0
-        ] += f"  {left_card.value if left_card else ' '} {right_card.value if right_card else ' '}"
-
-        return "\n".join(lines)
+        return out
 
     def __str__(self) -> str:
         return f"<Board ({self.moves} moves)>"
