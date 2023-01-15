@@ -1,8 +1,6 @@
 import copy
 import time
 from collections import Counter, defaultdict
-from heapq import heappop as pop
-from heapq import heappush as push
 
 from rich.console import Console
 
@@ -86,7 +84,7 @@ def simulate(
     top_moves: int = 2,
     first_top_moves: int = 3,
     first_games: int = 5,
-) -> tuple[list[int], dict]:
+) -> list[int]:
     """Simulate a board until a solution is found with the least amount of moves required
 
     known_min_moves: The current high score, used to optimise to not schedule
@@ -115,81 +113,88 @@ def simulate(
     # Just stuff for logging
     dups = 0
     max_no_draw_moves = 0
-    min_moves = 0
 
     # Track states for de-duplication
     seen_states = set()
 
-    # The heap ordered by current moves
-    boards = [(0, [], initial_board)]
+    # Pre-create queues for different move counts
+    queues = {key: [] for key in range(100)}
 
-    solution_trie = ddict()  # trie-ish?
+    # Add the initial board at 0 moves, storing the board and moves made so far
+    queues[0].append((initial_board, []))
+
+    # solution_trie = ddict()  # trie-ish?
 
     now = time.time()
 
-    while boards:
-        _, moves_made, board = pop(boards)
+    queue_num = 0
+    while queue_num < 100:
+        # Run through all the queues in the current queue_num
+        queue = queues[queue_num]
+        queue_size = len(queue)
+        console.log(
+            f"[{time.time() - now:.02f}s] "
+            f"Testing games with {queue_num}/{known_min_moves} moves.. "
+            f"({queue_size=} {dups=})"
+        )
+        for (board, moves_made) in queue:
+            if board.completed:
+                console.print(f"[green]Solution found with {board.moves} moves")
+                if board.moves < known_min_moves:
+                    console.print(
+                        "[green bold]Found a solution less than previously known!"
+                    )
+                    # add_solution(solution_trie, moves_made, 0, 1)
+                elif board.moves == known_min_moves:
+                    console.print("[yellow]Found matching previously known!")
+                    # add_solution(solution_trie, moves_made, 0, 1)
+                else:
+                    console.print("[red bold]Couldn't find the best solution!")
+                    # add_solution(solution_trie, moves_made, len(board.get_moves()), -2)
+                return moves_made  # , solution_trie
 
-        if board.moves > min_moves:
-            console.log(
-                f"[{time.time() - now:.02f}s] Testing games with {board.moves}/{known_min_moves} moves.. (total: {len(boards)}, dups: {dups})"
-            )
-            min_moves = board.moves
+            # Get all moves in sorted order, by lower movements required
+            moves = sorted(board.get_moves(), key=lambda m: (m[1], str(m[2])))
 
-        if board.completed or not board.cards:
-            console.print(f"[green]Solution found with {board.moves} moves")
-            if board.moves < known_min_moves:
-                console.print(
-                    "[green bold]Found a solution less than previously known!"
-                )
-                add_solution(solution_trie, moves_made, 0, 1)
-            elif board.moves == known_min_moves:
-                console.print("[yellow]Found matching previously known!")
-                add_solution(solution_trie, moves_made, 0, 1)
-            else:
-                console.print("[red bold]Couldn't find the best solution!")
-                add_solution(solution_trie, moves_made, len(board.get_moves()), -2)
-            return moves_made, solution_trie
-
-        # Get all moves in sorted order, by lower movements required
-        moves = sorted(board.get_moves(), key=lambda m: (m[1], str(m[2])))
-
-        if not moves:
-            add_solution(solution_trie, moves_made, 0, -1)
-            continue
-
-        add_solution(solution_trie, moves_made, len(moves), 0)
-
-        no_draw_moves = len([m for m in moves if m[1] == 0])
-        if no_draw_moves > max_no_draw_moves:
-            max_no_draw_moves = no_draw_moves
-
-        if board.moves <= first_games:
-            max_moves = first_top_moves
-        else:
-            max_moves = top_moves
-
-        # Always play all no draw moves
-        moves_played = 0
-        for idx, move in enumerate(moves):
-            # for idx in range(min(len(moves), max_moves)):
-            if move[1] > 0 and moves_played > max_moves:
-                break
-
-            if move[1] + board.moves > known_min_moves:
-                # Moves will definitely go over the limit, no use playing it
-                break
-
-            # Hacky, whatever, will be slow!
-            board_copy = copy.deepcopy(board)
-
-            moves_played += 1
-            board_copy.play_move(move)
-            if (board_state := board_copy.state) in seen_states:
-                dups += 1
+            if not moves:
+                # add_solution(solution_trie, moves_made, 0, -1)
                 continue
-            seen_states.add(board_state)
 
-            entry = (board_copy.moves, moves_made + [idx + 1], board_copy)
-            push(boards, entry)
+            # add_solution(solution_trie, moves_made, len(moves), 0)
+
+            no_draw_moves = len([m for m in moves if m[1] == 0])
+            if no_draw_moves > max_no_draw_moves:
+                max_no_draw_moves = no_draw_moves
+
+            if board.moves <= first_games:
+                max_moves = first_top_moves
+            else:
+                max_moves = top_moves
+
+            # Always play all no draw moves
+            moves_played = 0
+            for idx, move in enumerate(moves):
+                # for idx in range(min(len(moves), max_moves)):
+                if move[1] > 0 and moves_played > max_moves:
+                    break
+
+                if move[1] + board.moves > known_min_moves:
+                    # Moves will definitely go over the limit, no use playing it
+                    break
+
+                # Hacky, whatever, will be slow!
+                board_copy = copy.deepcopy(board)
+
+                moves_played += 1
+                board_copy.play_move(move)
+                if (board_state := board_copy.state) in seen_states:
+                    dups += 1
+                    continue
+                seen_states.add(board_state)
+
+                queues[board_copy.moves].append((board_copy, moves_made + [idx + 1]))
+
+                # entry = (board_copy.moves, moves_made + [idx + 1], board_copy)
+                # push(boards, entry)
+        queue_num += 1
     raise Exception("No solution found?")
